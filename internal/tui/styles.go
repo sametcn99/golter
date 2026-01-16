@@ -16,7 +16,6 @@ var (
 	mutedColor     = lipgloss.Color("#6B7280") // Gray
 	textColor      = lipgloss.Color("#F9FAFB") // Light text
 	dimTextColor   = lipgloss.Color("#9CA3AF") // Dim text
-	bgColor        = lipgloss.Color("#1F2937") // Dark background
 )
 
 // Styles
@@ -86,17 +85,9 @@ var (
 				Foreground(secondaryColor).
 				Bold(true)
 
-	// Progress bar style
-	progressBarStyle = lipgloss.NewStyle().
-				Foreground(primaryColor)
-
 	// Spinner style
 	spinnerStyle = lipgloss.NewStyle().
 			Foreground(primaryColor)
-
-	// Divider style
-	dividerStyle = lipgloss.NewStyle().
-			Foreground(mutedColor)
 )
 
 // Icons

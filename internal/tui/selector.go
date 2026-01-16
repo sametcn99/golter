@@ -31,7 +31,7 @@ func (i item) Title() string {
 		prefix = iconNotSelected
 	}
 
-	icon := iconFile
+	var icon string
 	if i.isDir {
 		icon = iconFolder
 	} else {
