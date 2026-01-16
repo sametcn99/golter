@@ -1,0 +1,126 @@
+version: '3'
+
+vars:
+  APP_NAME: golter
+  BUILD_DIR: bin
+  MAIN_FILE: ./main.go
+  GO: go
+  GOFLAGS: -v -buildvcs=false
+  # Dynamic variables are evaluated at runtime
+  LDFLAGS: -s -w
+
+tasks:
+  default:
+    desc: Build the application
+    cmds:
+      - task: build
+
+  build:
+    desc: Build the application
+    vars:
+      BINARY_EXT: '{{if eq OS "windows"}}.exe{{end}}'
+    cmds:
+      - echo "Building {{.APP_NAME}}..."
+      - mkdir -p {{.BUILD_DIR}}
+      - '{{.GO}} build {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}{{.BINARY_EXT}} {{.MAIN_FILE}}'
+      - echo "Build complete! Binary is at {{.BUILD_DIR}}/{{.APP_NAME}}{{.BINARY_EXT}}"
+    sources:
+      - ./**/*.go
+      - go.mod
+      - go.sum
+    generates:
+      - '{{.BUILD_DIR}}/{{.APP_NAME}}{{if eq OS "windows"}}.exe{{end}}'
+
+  run:
+    desc: Run the application
+    cmds:
+      - echo "Running {{.APP_NAME}}..."
+      - '{{.GO}} run {{.MAIN_FILE}}'
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - echo "Cleaning up..."
+      - rm -rf {{.BUILD_DIR}}
+      - echo "Clean complete!"
+
+  test:
+    desc: Run tests
+    cmds:
+      - echo "Running tests..."
+      - '{{.GO}} test -v ./...'
+
+  fmt:
+    desc: Format code
+    cmds:
+      - echo "Formatting code..."
+      - '{{.GO}} fmt ./...'
+
+  vet:
+    desc: Vet code
+    cmds:
+      - echo "Vetting code..."
+      - '{{.GO}} vet ./...'
+
+  lint:
+    desc: Lint code (requires golangci-lint)
+    cmds:
+      - echo "Linting code..."
+      - cmd: golangci-lint run
+        ignore_error: true
+
+  deps:
+    desc: Download dependencies
+    cmds:
+      - echo "Downloading dependencies..."
+      - '{{.GO}} mod download'
+      - '{{.GO}} mod tidy'
+
+  build-linux:
+    desc: Build for Linux
+    cmds:
+      - echo "Building for Linux..."
+      - 'GOOS=linux GOARCH=amd64 {{.GO}} build {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-linux-amd64 {{.MAIN_FILE}}'
+
+  build-windows:
+    desc: Build for Windows
+    cmds:
+      - echo "Building for Windows..."
+      - 'GOOS=windows GOARCH=amd64 {{.GO}} build {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-windows-amd64.exe {{.MAIN_FILE}}'
+
+  build-darwin:
+    desc: Build for macOS (Darwin)
+    cmds:
+      - echo "Building for macOS (Darwin)..."
+      - 'GOOS=darwin GOARCH=amd64 {{.GO}} build {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-darwin-amd64 {{.MAIN_FILE}}'
+      - 'GOOS=darwin GOARCH=arm64 {{.GO}} build {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" -o {{.BUILD_DIR}}/{{.APP_NAME}}-darwin-arm64 {{.MAIN_FILE}}'
+
+  build-all:
+    desc: Build for all platforms
+    deps: [build-linux, build-windows, build-darwin]
+
+  install:
+    desc: Install to system
+    vars:
+      # On Linux, use ~/.local/bin which is usually in PATH.
+      # On Windows/macOS, use Go default (usually ~/go/bin), as ~/.local/bin is not standard.
+      INSTALL_PATH: '{{if eq OS "linux"}}{{env "HOME"}}/.local/bin{{else}}{{end}}'
+    env:
+      GOBIN: '{{.INSTALL_PATH}}'
+    cmds:
+      - echo "Installing..."
+      - '{{.GO}} install {{.GOFLAGS}} -ldflags "{{.LDFLAGS}}" .'
+      - echo "Installation complete!"
+      - cmd: 'echo "Note: Ensure {{if .INSTALL_PATH}}{{.INSTALL_PATH}}{{else}}your Go bin directory{{end}} is in your PATH."'
+        silent: true
+
+  uninstall:
+    desc: Uninstall from system
+    vars:
+      INSTALL_PATH: '{{if eq OS "linux"}}{{env "HOME"}}/.local/bin{{else}}{{end}}'
+    env:
+      GOBIN: '{{.INSTALL_PATH}}'
+    cmds:
+      - echo "Uninstalling..."
+      - '{{.GO}} clean -i .'
+      - echo "Uninstallation complete!"
