@@ -6,21 +6,51 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/bmaupin/go-epub"
+	goepub "github.com/bmaupin/go-epub"
 	"github.com/go-pdf/fpdf"
 	"github.com/ledongthuc/pdf"
 	"github.com/pdfcpu/pdfcpu/pkg/api"
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/taylorskalyo/goreader/epub"
 	"github.com/xuri/excelize/v2"
 	"github.com/yuin/goldmark"
 )
 
 // DocumentConverter handles document format conversions
 type DocumentConverter struct{}
+
+var ebookExtensions = map[string]struct{}{
+	".epub": {},
+	".mobi": {},
+	".azw":  {},
+	".azw3": {},
+	".fb2":  {},
+}
+
+func isEbookExt(ext string) bool {
+	ext = strings.ToLower(ext)
+	if !strings.HasPrefix(ext, ".") {
+		ext = "." + ext
+	}
+	_, ok := ebookExtensions[ext]
+	return ok
+}
+
+func tempPathWithExt(prefix, ext string) (string, func(), error) {
+	dir, err := os.MkdirTemp("", prefix)
+	if err != nil {
+		return "", nil, fmt.Errorf("failed to create temp dir: %w", err)
+	}
+	cleanup := func() {
+		_ = os.RemoveAll(dir)
+	}
+	return filepath.Join(dir, "temp"+ext), cleanup, nil
+}
 
 func (c *DocumentConverter) Name() string {
 	return "Document Converter"
@@ -41,21 +71,24 @@ func (c *DocumentConverter) CanConvert(srcExt, targetExt string) bool {
 	case ".pdf":
 		return targetExt == ".md" || targetExt == ".pdf"
 	case ".md":
-		return targetExt == ".pdf" || targetExt == ".html" || targetExt == ".epub"
+		return targetExt == ".pdf" || targetExt == ".html" || isEbookExt(targetExt)
 	case ".html":
-		return targetExt == ".md" || targetExt == ".epub"
+		return targetExt == ".md" || isEbookExt(targetExt)
 	case ".csv":
 		return targetExt == ".xlsx" || targetExt == ".xls"
 	case ".xlsx", ".xls":
 		return targetExt == ".csv"
-	case ".epub":
-		return targetExt == ".pdf" || targetExt == ".md" || targetExt == ".html"
+	case ".epub", ".mobi", ".azw", ".azw3", ".fb2":
+		if isEbookExt(targetExt) {
+			return srcExt != targetExt
+		}
+		return targetExt == ".pdf" || targetExt == ".md" || targetExt == ".html" || targetExt == ".txt"
 	}
 	return false
 }
 
 func (c *DocumentConverter) SupportedSourceExtensions() []string {
-	return []string{".pdf", ".md", ".html", ".epub", ".csv", ".xlsx", ".xls"}
+	return []string{".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
 }
 
 func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
@@ -68,16 +101,25 @@ func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
 	case ".pdf":
 		return []string{".md", ".pdf"} // .pdf -> .pdf implies compression
 	case ".md":
-		return []string{".html", ".pdf", ".epub"}
+		return []string{".html", ".pdf", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
 	case ".html":
-		return []string{".md", ".epub"}
+		return []string{".md", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
 	case ".csv":
 		return []string{".xlsx"}
 	case ".xlsx", ".xls":
 		return []string{".csv"}
 	case ".epub":
-		// EPUB reading is not fully supported yet
-		return nil
+		return []string{".pdf", ".md", ".html", ".mobi", ".azw", ".azw3", ".fb2", ".txt"}
+	case ".mobi", ".azw", ".azw3", ".fb2":
+		allTargets := []string{".epub", ".mobi", ".azw", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}
+		filtered := make([]string, 0, len(allTargets))
+		for _, t := range allTargets {
+			if t == srcExt {
+				continue
+			}
+			filtered = append(filtered, t)
+		}
+		return filtered
 	}
 	return nil
 }
@@ -105,12 +147,16 @@ func (c *DocumentConverter) Convert(src, target string, opts Options) error {
 			return c.convertMarkdownToPDF(src, target)
 		} else if targetExt == ".epub" {
 			return c.convertMarkdownToEPUB(src, target)
+		} else if isEbookExt(targetExt) {
+			return c.convertMarkdownToEbook(src, target, opts)
 		}
 	case ".html":
 		if targetExt == ".md" {
 			return c.convertHTMLToMarkdown(src, target)
 		} else if targetExt == ".epub" {
 			return c.convertHTMLToEPUB(src, target)
+		} else if isEbookExt(targetExt) {
+			return c.convertHTMLToEbook(src, target, opts)
 		}
 	case ".csv":
 		if targetExt == ".xlsx" || targetExt == ".xls" {
@@ -119,6 +165,30 @@ func (c *DocumentConverter) Convert(src, target string, opts Options) error {
 	case ".xlsx", ".xls":
 		if targetExt == ".csv" {
 			return c.convertExcelToCSV(src, target)
+		}
+	case ".epub":
+		if targetExt == srcExt {
+			break
+		}
+		if targetExt == ".md" {
+			return c.convertEPUBToMarkdown(src, target)
+		} else if targetExt == ".html" {
+			return c.convertEPUBToHTML(src, target)
+		} else if targetExt == ".pdf" {
+			return c.convertEPUBToPDF(src, target)
+		} else if isEbookExt(targetExt) {
+			return c.convertEbookWithCalibre(src, target, opts)
+		} else if targetExt == ".txt" {
+			return c.convertEbookWithCalibre(src, target, opts)
+		}
+	case ".mobi", ".azw", ".azw3", ".fb2":
+		if targetExt == srcExt {
+			break
+		}
+		if targetExt == ".md" {
+			return c.convertEbookToMarkdown(src, target, opts)
+		} else if targetExt == ".html" || targetExt == ".pdf" || targetExt == ".txt" || isEbookExt(targetExt) {
+			return c.convertEbookWithCalibre(src, target, opts)
 		}
 	}
 
@@ -292,7 +362,7 @@ func (c *DocumentConverter) convertMarkdownToEPUB(src, target string) error {
 
 	// Create EPUB
 	title := strings.TrimSuffix(filepath.Base(src), ".md")
-	e := epub.NewEpub(title)
+	e := goepub.NewEpub(title)
 	e.SetAuthor("Golter Converter")
 
 	_, err = e.AddSection(htmlBuf.String(), "Chapter 1", "", "")
@@ -314,7 +384,7 @@ func (c *DocumentConverter) convertHTMLToEPUB(src, target string) error {
 	}
 
 	title := strings.TrimSuffix(filepath.Base(src), ".html")
-	e := epub.NewEpub(title)
+	e := goepub.NewEpub(title)
 	e.SetAuthor("Golter Converter")
 
 	_, err = e.AddSection(string(source), "Chapter 1", "", "")
@@ -324,6 +394,78 @@ func (c *DocumentConverter) convertHTMLToEPUB(src, target string) error {
 
 	if err := e.Write(target); err != nil {
 		return fmt.Errorf("failed to write EPUB file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *DocumentConverter) convertMarkdownToEbook(src, target string, opts Options) error {
+	if strings.EqualFold(filepath.Ext(target), ".epub") {
+		return c.convertMarkdownToEPUB(src, target)
+	}
+
+	tempEPUB, cleanup, err := tempPathWithExt("golter_ebook_epub", ".epub")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := c.convertMarkdownToEPUB(src, tempEPUB); err != nil {
+		return err
+	}
+
+	return c.convertEbookWithCalibre(tempEPUB, target, opts)
+}
+
+func (c *DocumentConverter) convertHTMLToEbook(src, target string, opts Options) error {
+	if strings.EqualFold(filepath.Ext(target), ".epub") {
+		return c.convertHTMLToEPUB(src, target)
+	}
+
+	tempEPUB, cleanup, err := tempPathWithExt("golter_ebook_epub", ".epub")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := c.convertHTMLToEPUB(src, tempEPUB); err != nil {
+		return err
+	}
+
+	return c.convertEbookWithCalibre(tempEPUB, target, opts)
+}
+
+func (c *DocumentConverter) convertEbookToMarkdown(src, target string, opts Options) error {
+	tempHTML, cleanup, err := tempPathWithExt("golter_ebook_html", ".html")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+
+	if err := c.convertEbookWithCalibre(src, tempHTML, opts); err != nil {
+		return err
+	}
+
+	return c.convertHTMLToMarkdown(tempHTML, target)
+}
+
+func (c *DocumentConverter) convertEbookWithCalibre(src, target string, opts Options) error {
+	_, err := exec.LookPath("ebook-convert")
+	if err != nil {
+		return fmt.Errorf("ebook-convert not found: please install Calibre to convert ebook formats (https://calibre-ebook.com)")
+	}
+
+	args := []string{src, target}
+	if extra, ok := opts["ebookArgs"].([]string); ok && len(extra) > 0 {
+		args = append(args, extra...)
+	} else if extraStr, ok := opts["ebookArgs"].(string); ok && strings.TrimSpace(extraStr) != "" {
+		args = append(args, strings.Fields(extraStr)...)
+	}
+
+	cmd := exec.Command("ebook-convert", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("ebook-convert failed: %w\nOutput: %s", err, string(output))
 	}
 
 	return nil
@@ -464,6 +606,140 @@ func (c *DocumentConverter) convertExcelToCSV(src, target string) error {
 		if err := writer.Write(row); err != nil {
 			return fmt.Errorf("failed to write CSV row: %w", err)
 		}
+	}
+
+	return nil
+}
+
+func (c *DocumentConverter) convertEPUBToMarkdown(src, target string) error {
+	rc, err := epub.OpenReader(src)
+	if err != nil {
+		return fmt.Errorf("failed to open EPUB: %w", err)
+	}
+	defer rc.Close()
+
+	if len(rc.Rootfiles) == 0 {
+		return fmt.Errorf("no rootfiles found in EPUB")
+	}
+
+	book := rc.Rootfiles[0]
+	var contentBuilder strings.Builder
+	converter := md.NewConverter("", true, nil)
+
+	// Iterate through spine items
+	for _, item := range book.Spine.Itemrefs {
+		if item.Item == nil {
+			continue
+		}
+
+		// Open the file from the EPUB
+		f, err := item.Item.Open()
+		if err != nil {
+			continue
+		}
+
+		b, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			continue
+		}
+
+		// Convert HTML content to Markdown
+		markdown, err := converter.ConvertString(string(b))
+		if err != nil {
+			continue
+		}
+
+		contentBuilder.WriteString(markdown)
+		contentBuilder.WriteString("\n\n---\n\n")
+	}
+
+	if err := os.WriteFile(target, []byte(contentBuilder.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write markdown file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *DocumentConverter) convertEPUBToHTML(src, target string) error {
+	rc, err := epub.OpenReader(src)
+	if err != nil {
+		return fmt.Errorf("failed to open EPUB: %w", err)
+	}
+	defer rc.Close()
+
+	if len(rc.Rootfiles) == 0 {
+		return fmt.Errorf("no rootfiles found in EPUB")
+	}
+
+	book := rc.Rootfiles[0]
+	var contentBuilder strings.Builder
+
+	contentBuilder.WriteString("<!DOCTYPE html><html><body>")
+
+	// Iterate through spine items
+	for _, item := range book.Spine.Itemrefs {
+		if item.Item == nil {
+			continue
+		}
+
+		f, err := item.Item.Open()
+		if err != nil {
+			continue
+		}
+
+		b, err := io.ReadAll(f)
+		f.Close()
+		if err != nil {
+			continue
+		}
+
+		// Simple concatenation of body content would be better, but full HTML concatenation is easier for now
+		// Ideally we should strip <html>, <head>, <body> tags and just take the inner content
+		// For simplicity, we just append the whole thing, browsers handle nested html tags somewhat okay-ish
+		// or better: just append the raw content.
+		contentBuilder.Write(b)
+		contentBuilder.WriteString("<hr>")
+	}
+
+	contentBuilder.WriteString("</body></html>")
+
+	if err := os.WriteFile(target, []byte(contentBuilder.String()), 0644); err != nil {
+		return fmt.Errorf("failed to write HTML file: %w", err)
+	}
+
+	return nil
+}
+
+func (c *DocumentConverter) convertEPUBToPDF(src, target string) error {
+	// First convert to HTML
+	tempHTML := strings.TrimSuffix(target, filepath.Ext(target)) + "_temp.html"
+	if err := c.convertEPUBToHTML(src, tempHTML); err != nil {
+		return err
+	}
+	defer os.Remove(tempHTML)
+
+	// Then convert HTML to PDF (using existing logic logic, but we need to read the temp file)
+	// We can reuse convertMarkdownToPDF logic but starting from HTML
+
+	// Read HTML source
+	source, err := os.ReadFile(tempHTML)
+	if err != nil {
+		return fmt.Errorf("failed to read temp HTML file: %w", err)
+	}
+
+	// Create PDF
+	pdfDoc := fpdf.New("P", "mm", "A4", "")
+	pdfDoc.SetMargins(20, 20, 20)
+	pdfDoc.AddPage()
+	pdfDoc.SetFont("Arial", "", 12)
+
+	_, lineHt := pdfDoc.GetFontSize()
+	html := pdfDoc.HTMLBasicNew()
+	html.Write(lineHt, string(source))
+
+	if err := pdfDoc.OutputFileAndClose(target); err != nil {
+		return fmt.Errorf("failed to create PDF: %w", err)
 	}
 
 	return nil

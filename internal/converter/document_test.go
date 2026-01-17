@@ -2,7 +2,9 @@ package converter
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -18,7 +20,7 @@ func TestDocumentConverter_SupportedExtensions(t *testing.T) {
 	if len(srcExts) == 0 {
 		t.Error("SupportedSourceExtensions returned empty list")
 	}
-	expectedSrc := []string{".pdf", ".md", ".html", ".epub", ".csv", ".xlsx", ".xls"}
+	expectedSrc := []string{".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
 	for _, exp := range expectedSrc {
 		found := false
 		for _, got := range srcExts {
@@ -33,11 +35,7 @@ func TestDocumentConverter_SupportedExtensions(t *testing.T) {
 	}
 
 	// Test SupportedTargetFormats
-	// Note: .epub source returns nil in current implementation
 	for _, ext := range expectedSrc {
-		if ext == ".epub" {
-			continue
-		}
 		targets := c.SupportedTargetFormats(ext)
 		if len(targets) == 0 {
 			t.Errorf("SupportedTargetFormats(%s) returned empty list", ext)
@@ -188,26 +186,113 @@ func TestDocumentConverter_Convert_Integration_Exhaustive(t *testing.T) {
 	epubPath := filepath.Join(tmpDir, "test.epub")
 	createTestEPUB(t, epubPath)
 
-	// Note: EPUB reading is not fully supported in the implementation (returns nil for SupportedTargetFormats),
-	// but let's check if CanConvert allows it and if Convert fails gracefully or works.
-	// Looking at code: SupportedTargetFormats returns nil for .epub source.
-	// So Convert might fail or not be reachable via Manager.
-	// But we are testing Converter directly.
-	// Wait, DocumentConverter.Convert doesn't have a case for .epub source!
-	// Let's check document.go again.
-	// It has `case ".epub": return targetExt == ".pdf" || ...` in CanConvert.
-	// But in Convert method?
-	// Lines 94-123 of document.go:
-	// case ".pdf": ...
-	// case ".md": ...
-	// case ".html": ...
-	// case ".csv": ...
-	// case ".xlsx": ...
-	// It DOES NOT have case ".epub".
-	// So EPUB conversion is implemented in CanConvert but NOT in Convert!
-	// This is a bug or incomplete feature in the code I read.
-	// I should probably not test it or expect it to fail.
-	// I'll skip EPUB source tests or expect error.
+	t.Run("EPUB->MD", func(t *testing.T) {
+		target := filepath.Join(tmpDir, "epub_out.md")
+		if err := c.Convert(epubPath, target, Options{}); err != nil {
+			t.Errorf("Convert(EPUB->MD) failed: %v", err)
+		}
+	})
+
+	t.Run("EPUB->HTML", func(t *testing.T) {
+		target := filepath.Join(tmpDir, "epub_out.html")
+		if err := c.Convert(epubPath, target, Options{}); err != nil {
+			t.Errorf("Convert(EPUB->HTML) failed: %v", err)
+		}
+	})
+
+	t.Run("EPUB->PDF", func(t *testing.T) {
+		target := filepath.Join(tmpDir, "epub_out.pdf")
+		if err := c.Convert(epubPath, target, Options{}); err != nil {
+			t.Errorf("Convert(EPUB->PDF) failed: %v", err)
+		}
+	})
+}
+
+func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
+	if !ensureEbookConvertInPath(t) {
+		t.Skip("ebook-convert not found, skipping ebook conversion tests")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "golter_ebook_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	c := &DocumentConverter{}
+
+	// Create a source EPUB
+	epubPath := filepath.Join(tmpDir, "test.epub")
+	createTestEPUB(t, epubPath)
+
+	// EPUB -> MOBI
+	mobiPath := filepath.Join(tmpDir, "test.mobi")
+	if err := c.Convert(epubPath, mobiPath, Options{}); err != nil {
+		t.Fatalf("Convert(EPUB->MOBI) failed: %v", err)
+	}
+	if _, err := os.Stat(mobiPath); os.IsNotExist(err) {
+		t.Fatalf("Target MOBI not created: %s", mobiPath)
+	}
+
+	// MOBI -> EPUB
+	backToEPUB := filepath.Join(tmpDir, "back.epub")
+	if err := c.Convert(mobiPath, backToEPUB, Options{}); err != nil {
+		t.Fatalf("Convert(MOBI->EPUB) failed: %v", err)
+	}
+	if _, err := os.Stat(backToEPUB); os.IsNotExist(err) {
+		t.Fatalf("Target EPUB not created: %s", backToEPUB)
+	}
+
+	// EPUB -> AZW3
+	azw3Path := filepath.Join(tmpDir, "test.azw3")
+	if err := c.Convert(epubPath, azw3Path, Options{}); err != nil {
+		t.Fatalf("Convert(EPUB->AZW3) failed: %v", err)
+	}
+	if _, err := os.Stat(azw3Path); os.IsNotExist(err) {
+		t.Fatalf("Target AZW3 not created: %s", azw3Path)
+	}
+}
+
+func TestDocumentConverter_Convert_EbookFromMarkdownAndHTML(t *testing.T) {
+	if !ensureEbookConvertInPath(t) {
+		t.Skip("ebook-convert not found, skipping ebook conversion tests")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "golter_ebook_src_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	c := &DocumentConverter{}
+
+	mdPath := filepath.Join(tmpDir, "src.md")
+	if err := os.WriteFile(mdPath, []byte("# Title\n\nHello ebook"), 0644); err != nil {
+		t.Fatalf("failed to write md: %v", err)
+	}
+
+	htmlPath := filepath.Join(tmpDir, "src.html")
+	if err := os.WriteFile(htmlPath, []byte("<html><body><h1>Title</h1><p>Hello ebook</p></body></html>"), 0644); err != nil {
+		t.Fatalf("failed to write html: %v", err)
+	}
+
+	// MD -> MOBI
+	mobiPath := filepath.Join(tmpDir, "md_out.mobi")
+	if err := c.Convert(mdPath, mobiPath, Options{}); err != nil {
+		t.Fatalf("Convert(MD->MOBI) failed: %v", err)
+	}
+	if _, err := os.Stat(mobiPath); os.IsNotExist(err) {
+		t.Fatalf("Target MOBI not created: %s", mobiPath)
+	}
+
+	// HTML -> AZW3
+	azw3Path := filepath.Join(tmpDir, "html_out.azw3")
+	if err := c.Convert(htmlPath, azw3Path, Options{}); err != nil {
+		t.Fatalf("Convert(HTML->AZW3) failed: %v", err)
+	}
+	if _, err := os.Stat(azw3Path); os.IsNotExist(err) {
+		t.Fatalf("Target AZW3 not created: %s", azw3Path)
+	}
 }
 
 func TestDocumentConverter_Name(t *testing.T) {
@@ -251,7 +336,17 @@ func TestDocumentConverter_CanConvert(t *testing.T) {
 		{".epub", ".pdf", true},
 		{".epub", ".md", true},
 		{".epub", ".html", true},
+		{".epub", ".mobi", true},
+		{".epub", ".azw3", true},
 		{".epub", ".csv", false},
+
+		// Ebook formats
+		{".mobi", ".epub", true},
+		{".mobi", ".pdf", true},
+		{".azw", ".azw3", true},
+		{".azw3", ".html", true},
+		{".fb2", ".md", true},
+		{".fb2", ".csv", false},
 	}
 
 	for _, tt := range tests {
@@ -269,8 +364,10 @@ func TestDocumentConverter_SupportedTargetFormats(t *testing.T) {
 		want []string
 	}{
 		{".pdf", []string{".md", ".pdf"}},
-		{".md", []string{".html", ".pdf", ".epub"}},
+		{".md", []string{".html", ".pdf", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}},
 		{".csv", []string{".xlsx"}},
+		{".epub", []string{".pdf", ".md", ".html", ".mobi", ".azw", ".azw3", ".fb2", ".txt"}},
+		{".mobi", []string{".epub", ".azw", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}},
 	}
 
 	for _, tt := range tests {
@@ -294,4 +391,46 @@ func TestDocumentConverter_SupportedTargetFormats(t *testing.T) {
 			}
 		}
 	}
+}
+
+func ensureEbookConvertInPath(t *testing.T) bool {
+	binName := "ebook-convert"
+	if runtime.GOOS == "windows" {
+		binName = "ebook-convert.exe"
+	}
+
+	if _, err := exec.LookPath(binName); err == nil {
+		return true
+	}
+
+	var candidates []string
+	if runtime.GOOS == "windows" {
+		candidates = []string{
+			`C:\\Program Files\\Calibre2\\ebook-convert.exe`,
+			`C:\\Program Files (x86)\\Calibre2\\ebook-convert.exe`,
+		}
+	} else {
+		candidates = []string{
+			"/usr/bin/ebook-convert",
+			"/usr/local/bin/ebook-convert",
+			"/snap/bin/ebook-convert",
+			"/opt/homebrew/bin/ebook-convert",
+		}
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			dir := filepath.Dir(p)
+			current := os.Getenv("PATH")
+			if !strings.Contains(current, dir) {
+				if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+current); err != nil {
+					t.Logf("failed to update PATH for ebook-convert: %v", err)
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	return false
 }

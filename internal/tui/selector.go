@@ -155,7 +155,7 @@ func getFileType(ext string) FileType {
 		return FileTypeVideo
 	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a":
 		return FileTypeAudio
-	case ".pdf", ".md", ".html", ".epub", ".doc", ".docx", ".csv", ".xlsx", ".xls":
+	case ".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".doc", ".docx", ".csv", ".xlsx", ".xls":
 		return FileTypeDocument
 	default:
 		return FileTypeUnknown

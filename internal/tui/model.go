@@ -762,6 +762,8 @@ func getFormatIcon(format string) string {
 		return iconHTML
 	case ".epub":
 		return iconEPUB
+	case ".mobi", ".azw", ".azw3", ".fb2":
+		return iconEPUB
 	case ".csv":
 		return iconCSV
 	case ".xlsx", ".xls":

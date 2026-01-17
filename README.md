@@ -60,22 +60,29 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 
 ### Documents
 
-| Input                  | Output                          |
-|------------------------|---------------------------------|
-| `.pdf`, `.md`, `.html` | `.pdf`, `.md`, `.html`, `.epub` |
-| `.csv`                 | `.xlsx`                         |
-| `.xlsx`, `.xls`        | `.csv`                          |
+| Input                                     | Output                                                                    |
+|-------------------------------------------|---------------------------------------------------------------------------|
+| `.pdf`, `.md`, `.html`                    | `.pdf`, `.md`, `.html`, `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`         |
+| `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.pdf`, `.html`, `.txt`, `.md` |
+| `.csv`                                    | `.xlsx`                                                                   |
+| `.xlsx`, `.xls`                           | `.csv`                                                                    |
 
 **Features:**
 
 - PDF text extraction to Markdown
 - Markdown to styled HTML with responsive design
 - Markdown/HTML to EPUB conversion
+- EPUB/MOBI/AZW/AZW3/FB2 conversions via Calibre (if installed)
 - PDF compression/optimization
 - CSV to Excel conversion with styled headers and auto-fit columns
 - Excel to CSV export (exports first sheet)
 
-> **Note:** Video and audio conversion requires `ffmpeg` to be installed on your system.
+> **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`.
+
+**PATH Note (ebook-convert):**
+- **Linux:** Typically available at `/usr/bin/ebook-convert` (or `/snap/bin/ebook-convert`). Ensure the directory is on `PATH`.
+- **macOS (Homebrew):** `/opt/homebrew/bin/ebook-convert` (Apple Silicon) or `/usr/local/bin/ebook-convert` (Intel).
+- **Windows:** `C:\Program Files\Calibre2\ebook-convert.exe` (or `C:\Program Files (x86)\Calibre2\ebook-convert.exe`). Add the folder to `PATH` if not detected.
 
 ## Installation
 
@@ -83,6 +90,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 
 - **Go 1.21+**
 - **ffmpeg** (required for video/audio conversion)
+- **Calibre (ebook-convert)** (required for ebook conversions beyond EPUB)
 
 ### Quick Install
 
@@ -121,13 +129,13 @@ task build
 
 ```bash
 # Ubuntu/Debian
-sudo apt update && sudo apt install ffmpeg
+sudo apt update && sudo apt install ffmpeg calibre
 
 # Fedora
-sudo dnf install ffmpeg
+sudo dnf install ffmpeg calibre
 
 # Arch Linux
-sudo pacman -S ffmpeg
+sudo pacman -S ffmpeg calibre
 
 # Build
 go build -o golter main.go
@@ -145,6 +153,9 @@ go build -o golter main.go
 # Install ffmpeg
 brew install ffmpeg
 
+# Install Calibre (ebook-convert)
+brew install --cask calibre
+
 # Build
 go build -o golter main.go
 
@@ -161,8 +172,14 @@ go build -o golter main.go
 # Using winget
 winget install ffmpeg
 
+# Calibre (ebook-convert)
+winget install calibre.calibre
+
 # Or using chocolatey
 choco install ffmpeg
+
+# Calibre (ebook-convert)
+choco install calibre
 
 # Build
 go build -o golter.exe main.go

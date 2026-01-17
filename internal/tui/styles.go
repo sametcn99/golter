@@ -360,7 +360,7 @@ func GetFileCategory(ext string) string {
 		return "video"
 	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a":
 		return "audio"
-	case ".pdf", ".md", ".html", ".epub", ".doc", ".docx", ".txt", ".csv", ".xlsx", ".xls":
+	case ".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".doc", ".docx", ".txt", ".csv", ".xlsx", ".xls":
 		return "document"
 	default:
 		return "other"
