@@ -20,12 +20,15 @@ type item struct {
 }
 
 func (i item) Title() string {
+	// Parent directory item
 	if i.info == nil && i.isDir {
-		return "📁 .."
+		return iconBack + " .."
 	}
 
 	var prefix string
-	if i.selected {
+	if i.isDir {
+		prefix = "  " // No checkbox for directories
+	} else if i.selected {
 		prefix = iconSelected
 	} else {
 		prefix = iconNotSelected
@@ -60,13 +63,21 @@ func (i item) FilterValue() string {
 	return i.info.Name()
 }
 
-// FileType represents the type of file (image, video, etc.)
+// FileType represents the type of file (image, video, audio, document)
 type FileType int
 
 const (
 	FileTypeUnknown FileType = iota
 	FileTypeImage
 	FileTypeVideo
+	FileTypeAudio
+	FileTypeDocument
+)
+
+// Highlight styles for list
+var (
+	listHighlightColor   = lipgloss.Color("#00D9FF") // Bright Cyan
+	listHighlightBgColor = lipgloss.Color("#1E3A5F") // Dark Blue Background
 )
 
 type Selector struct {
@@ -75,6 +86,8 @@ type Selector struct {
 	selected         map[string]bool // path -> true
 	allowedExts      map[string]bool
 	selectedFileType FileType // Track the type of first selected file
+	width            int
+	height           int
 }
 
 func NewSelector(startPath string, allowedExts []string) Selector {
@@ -82,29 +95,37 @@ func NewSelector(startPath string, allowedExts []string) Selector {
 	delegate.ShowDescription = false
 	delegate.SetSpacing(0)
 
-	// Highlight color for selected item - bright cyan with background
-	highlightColor := lipgloss.Color("#00FFFF") // Cyan
-	highlightBg := lipgloss.Color("#1E3A5F")    // Dark blue background
-
+	// Enhanced highlight styling for better UX - same padding for all to prevent shifting
 	delegate.Styles.SelectedTitle = lipgloss.NewStyle().
-		Foreground(highlightColor).
-		Background(highlightBg).
-		Bold(true).
-		Padding(0, 1, 0, 2)
+		Foreground(listHighlightColor).
+		Background(listHighlightBgColor).
+		Bold(true)
 	delegate.Styles.NormalTitle = lipgloss.NewStyle().
-		Foreground(textColor).
-		Padding(0, 0, 0, 2)
+		Foreground(textColor)
+
+	// Dimmed style for unselected items
+	delegate.Styles.DimmedTitle = lipgloss.NewStyle().
+		Foreground(mutedColor)
 
 	l := list.New(nil, delegate, 0, 0)
 	l.Title = ""
 	l.SetShowTitle(false)
-	l.SetShowStatusBar(false)
+	l.SetShowStatusBar(true)
+	l.SetStatusBarItemName("item", "items")
 	l.SetShowHelp(false)
 	l.DisableQuitKeybindings()
 	l.Styles.Title = titleStyle
 	l.SetFilteringEnabled(true)
-	l.Styles.FilterPrompt = lipgloss.NewStyle().Foreground(primaryColor)
-	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(primaryColor)
+	l.Styles.FilterPrompt = lipgloss.NewStyle().
+		Foreground(primaryLight).
+		Bold(true)
+	l.Styles.FilterCursor = lipgloss.NewStyle().
+		Foreground(primaryLight)
+
+	// Status bar styling
+	l.Styles.StatusBar = lipgloss.NewStyle().
+		Foreground(dimTextColor).
+		Padding(0, 0, 1, 2)
 
 	exts := make(map[string]bool)
 	for _, e := range allowedExts {
@@ -117,6 +138,8 @@ func NewSelector(startPath string, allowedExts []string) Selector {
 		selected:         make(map[string]bool),
 		allowedExts:      exts,
 		selectedFileType: FileTypeUnknown,
+		width:            80,
+		height:           24,
 	}
 	s.loadFiles()
 	return s
@@ -130,15 +153,24 @@ func getFileType(ext string) FileType {
 		return FileTypeImage
 	case ".mp4", ".avi", ".mkv", ".webm", ".mov", ".wmv", ".flv":
 		return FileTypeVideo
+	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a":
+		return FileTypeAudio
+	case ".pdf", ".md", ".html", ".epub", ".doc", ".docx", ".csv", ".xlsx", ".xls":
+		return FileTypeDocument
 	default:
 		return FileTypeUnknown
 	}
 }
 
 func (s *Selector) loadFiles() {
-	entries, _ := os.ReadDir(s.currentDir)
+	entries, err := os.ReadDir(s.currentDir)
+	if err != nil {
+		// Handle error gracefully
+		s.list.SetItems([]list.Item{})
+		return
+	}
 
-	// Sort: Dirs first, then files
+	// Sort: Dirs first, then files alphabetically
 	sort.Slice(entries, func(i, j int) bool {
 		if entries[i].IsDir() && !entries[j].IsDir() {
 			return true
@@ -146,7 +178,7 @@ func (s *Selector) loadFiles() {
 		if !entries[i].IsDir() && entries[j].IsDir() {
 			return false
 		}
-		return entries[i].Name() < entries[j].Name()
+		return strings.ToLower(entries[i].Name()) < strings.ToLower(entries[j].Name())
 	})
 
 	items := []list.Item{}
@@ -156,21 +188,29 @@ func (s *Selector) loadFiles() {
 		items = append(items, item{path: filepath.Dir(s.currentDir), isDir: true, info: nil})
 	}
 
+	// Count files and directories for summary
+	dirCount := 0
+	fileCount := 0
+
 	for _, e := range entries {
 		info, err := e.Info()
 		if err != nil {
 			continue
 		}
 
-		if !e.IsDir() {
+		// Skip hidden files and directories
+		if strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+
+		if e.IsDir() {
+			dirCount++
+		} else {
 			ext := strings.ToLower(filepath.Ext(e.Name()))
 			if !s.allowedExts[ext] {
 				continue
 			}
-		}
-		// Skip hidden files
-		if strings.HasPrefix(e.Name(), ".") {
-			continue
+			fileCount++
 		}
 
 		path := filepath.Join(s.currentDir, e.Name())
@@ -181,7 +221,12 @@ func (s *Selector) loadFiles() {
 			selected: s.selected[path],
 		})
 	}
+
 	s.list.SetItems(items)
+
+	// Update status bar with summary
+	statusText := fmt.Sprintf("%d folders, %d files", dirCount, fileCount)
+	s.list.SetStatusBarItemName(statusText, statusText)
 }
 
 func (s *Selector) Init() tea.Cmd {
@@ -191,11 +236,23 @@ func (s *Selector) Init() tea.Cmd {
 func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
+		s.width = msg.Width
+		s.height = msg.Height
+		// Reserve space for header, footer, and path display
+		listHeight := msg.Height - 10
+		if listHeight < 5 {
+			listHeight = 5
+		}
 		s.list.SetWidth(msg.Width)
-		s.list.SetHeight(msg.Height - 8) // Adjust for header/footer
+		s.list.SetHeight(listHeight)
 		return *s, nil
 
 	case tea.KeyMsg:
+		// Don't handle keys when filtering
+		if s.list.FilterState() == list.Filtering {
+			break
+		}
+
 		switch msg.String() {
 		case "enter":
 			i, ok := s.list.SelectedItem().(item)
@@ -243,6 +300,7 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 		case "a":
 			// Select all files of the same type in current directory
 			items := s.list.Items()
+			selectedCount := 0
 			for idx, listItem := range items {
 				if i, ok := listItem.(item); ok && !i.isDir && i.info != nil {
 					ext := filepath.Ext(i.path)
@@ -258,6 +316,7 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 						s.selected[i.path] = true
 						i.selected = true
 						s.list.SetItem(idx, i)
+						selectedCount++
 					}
 				}
 			}
@@ -276,6 +335,32 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 			}
 			s.selectedFileType = FileTypeUnknown
 			return *s, nil
+		case "h", "left":
+			// Go to parent directory
+			parent := filepath.Dir(s.currentDir)
+			if parent != s.currentDir {
+				s.currentDir = parent
+				s.loadFiles()
+				s.list.ResetSelected()
+				return *s, nil
+			}
+		case "l", "right":
+			// Enter directory if selected
+			i, ok := s.list.SelectedItem().(item)
+			if ok && i.isDir {
+				s.currentDir = i.path
+				s.loadFiles()
+				s.list.ResetSelected()
+				return *s, nil
+			}
+		case "g":
+			// Go to top
+			s.list.Select(0)
+			return *s, nil
+		case "G":
+			// Go to bottom
+			s.list.Select(len(s.list.Items()) - 1)
+			return *s, nil
 		}
 	}
 
@@ -285,9 +370,40 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 }
 
 func (s *Selector) View() string {
-	// Show current directory path
-	dirPath := mutedStyle.Render("  📂 " + s.currentDir)
-	return dirPath + "\n\n" + s.list.View()
+	var b strings.Builder
+
+	// Current directory path with breadcrumb style
+	path := truncatePath(s.currentDir, s.width-10)
+	dirHeader := dirPathStyle.Render(iconFolderOpen + " " + path)
+	b.WriteString(dirHeader + "\n")
+
+	// Show selection summary if files are selected
+	if len(s.selected) > 0 {
+		typeIcon := s.getSelectedTypeIcon()
+		summary := selectedFileStyle.Render(fmt.Sprintf("  %s %d %s selected", typeIcon, len(s.selected), s.selectedFileType.String()))
+		b.WriteString(summary + "\n")
+	}
+
+	b.WriteString("\n")
+	b.WriteString(s.list.View())
+
+	return b.String()
+}
+
+// getSelectedTypeIcon returns an icon for the currently selected file type
+func (s *Selector) getSelectedTypeIcon() string {
+	switch s.selectedFileType {
+	case FileTypeImage:
+		return iconImage
+	case FileTypeVideo:
+		return iconVideo
+	case FileTypeAudio:
+		return iconAudio
+	case FileTypeDocument:
+		return iconDocument
+	default:
+		return iconFile
+	}
 }
 
 func (s *Selector) SelectedFiles() []string {
@@ -295,6 +411,8 @@ func (s *Selector) SelectedFiles() []string {
 	for f := range s.selected {
 		files = append(files, f)
 	}
+	// Sort for consistent ordering
+	sort.Strings(files)
 	return files
 }
 
@@ -316,6 +434,10 @@ func (ft FileType) String() string {
 		return "images"
 	case FileTypeVideo:
 		return "videos"
+	case FileTypeAudio:
+		return "audio files"
+	case FileTypeDocument:
+		return "documents"
 	default:
 		return "files"
 	}
@@ -323,19 +445,70 @@ func (ft FileType) String() string {
 
 func getFileIcon(ext string) string {
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff":
+	case ".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff":
 		return iconImage
+	case ".gif":
+		return iconGIF
 	case ".mp4", ".avi", ".mkv", ".webm", ".mov", ".wmv", ".flv":
 		return iconVideo
-	case ".mp3", ".wav", ".flac", ".aac", ".ogg":
-		return "🎵"
+	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a":
+		return iconAudio
 	case ".pdf":
-		return "📕"
+		return iconPDF
+	case ".md":
+		return iconMarkdown
+	case ".html":
+		return iconHTML
+	case ".epub":
+		return iconEPUB
+	case ".csv":
+		return iconCSV
+	case ".xlsx", ".xls":
+		return iconExcel
 	case ".doc", ".docx":
-		return "📝"
+		return iconDocument
 	case ".zip", ".rar", ".7z", ".tar", ".gz":
-		return "📦"
+		return iconArchive
 	default:
 		return iconFile
 	}
+}
+
+// truncatePath shortens a path to fit within maxWidth
+func truncatePath(path string, maxWidth int) string {
+	if len(path) <= maxWidth {
+		return path
+	}
+
+	// Try to show the last few path components
+	parts := strings.Split(path, string(filepath.Separator))
+	if len(parts) <= 2 {
+		return "..." + path[len(path)-maxWidth+3:]
+	}
+
+	// Build from the end
+	result := parts[len(parts)-1]
+	for i := len(parts) - 2; i >= 0; i-- {
+		if len(parts[i])+len(result)+4 > maxWidth {
+			break
+		}
+		result = parts[i] + string(filepath.Separator) + result
+	}
+
+	return "..." + string(filepath.Separator) + result
+}
+
+// TotalSelectableFiles returns the count of selectable files in current directory
+func (s *Selector) TotalSelectableFiles() int {
+	count := 0
+	for _, listItem := range s.list.Items() {
+		if i, ok := listItem.(item); ok && !i.isDir && i.info != nil {
+			ext := filepath.Ext(i.path)
+			fileType := getFileType(ext)
+			if s.selectedFileType == FileTypeUnknown || fileType == s.selectedFileType {
+				count++
+			}
+		}
+	}
+	return count
 }
