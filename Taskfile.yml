@@ -45,10 +45,10 @@ tasks:
       - echo "Clean complete!"
 
   test:
-    desc: Run tests
+    desc: Run all tests with coverage
     cmds:
-      - echo "Running tests..."
-      - '{{.GO}} test -v ./...'
+      - echo "Running all tests..."
+      - '{{.GO}} test -v -cover ./...'
 
   fmt:
     desc: Format code
