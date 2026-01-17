@@ -1,5 +1,7 @@
 # Golter
 
+![Logo](https://golter.sametcc.me/opengraph-image)
+
 Terminal-based file converter built with Go. It provides a modern, user-friendly Terminal User Interface (TUI) for batch converting images, videos, audio, and documents between various formats.
 
 ## Features
@@ -128,6 +130,8 @@ sudo pacman -S ffmpeg
 
 # Build
 go build -o golter main.go
+
+# Run
 ./golter
 ```
 
@@ -137,8 +141,13 @@ go build -o golter main.go
 <summary><b>macOS</b></summary>
 
 ```bash
+# Install ffmpeg
 brew install ffmpeg
+
+# Build
 go build -o golter main.go
+
+# Run
 ./golter
 ```
 
@@ -156,6 +165,8 @@ choco install ffmpeg
 
 # Build
 go build -o golter.exe main.go
+
+# Run
 .\golter.exe
 ```
 
@@ -193,19 +204,6 @@ Start in a specific directory:
 | `G`       | Go to bottom                  |
 | `Esc`     | Go back / Cancel              |
 | `q`       | Quit application              |
-
-### Workflow
-
-1. **Navigate:** Browse your file system using arrow keys or Vim bindings
-2. **Select:** Press `Space` to mark files (files must be of the same type)
-3. **Confirm:** Press `c` when done selecting files
-4. **Choose Action:**
-   - **Convert Format:** Change file format (e.g., JPG → PNG)
-   - **Compress Files:** Reduce size while keeping format
-5. **Configure:**
-   - **Convert:** Select target format
-   - **Compress:** Choose quality level
-6. **Process:** Watch the progress as files are converted concurrently
 
 ## License
 

@@ -1,4 +1,4 @@
-module golter
+module github.com/sametcn99/golter
 
 go 1.24.4
 

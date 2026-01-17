@@ -9,7 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"golter/internal/converter"
+	"github.com/sametcn99/golter/internal/converter"
+	"github.com/sametcn99/golter/internal/version"
 
 	"github.com/charmbracelet/bubbles/progress"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -72,6 +73,13 @@ type progressMsg struct {
 
 type tickMsg time.Time
 
+type checkUpdateMsg struct {
+	latest    string
+	url       string
+	available bool
+	err       error
+}
+
 // Model represents the main application model
 type Model struct {
 	state           State
@@ -96,6 +104,9 @@ type Model struct {
 	width           int
 	height          int
 	startTime       time.Time
+	latestVersion   string
+	updateUrl       string
+	updateAvailable bool
 }
 
 // NewModel creates a new Model with initial configuration
@@ -165,7 +176,13 @@ func statFile(path string) (os.FileInfo, error) {
 func (m Model) Init() tea.Cmd {
 	return tea.Batch(
 		m.spinner.Tick,
+		checkUpdatesCmd,
 	)
+}
+
+func checkUpdatesCmd() tea.Msg {
+	latest, url, available, err := version.CheckForUpdates()
+	return checkUpdateMsg{latest, url, available, err}
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -304,6 +321,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+
+	case checkUpdateMsg:
+		if msg.err == nil && msg.available {
+			m.latestVersion = msg.latest
+			m.updateUrl = msg.url
+			m.updateAvailable = true
+		}
+		return m, nil
 	}
 
 	// State-specific handling
@@ -511,7 +536,13 @@ func (m Model) View() string {
 	var s strings.Builder
 
 	// Header with branding
-	header := headerStyle.Render(" " + iconConvert + " Golter - File Converter ")
+	versionInfo := fmt.Sprintf(" v%s", version.Current)
+	if m.updateAvailable {
+		linkText := fmt.Sprintf("(Update available: v%s)", m.latestVersion)
+		link := fmt.Sprintf("\x1b]8;;%s\x1b\\%s\x1b]8;;\x1b\\", m.updateUrl, linkText)
+		versionInfo += " " + link
+	}
+	header := headerStyle.Render(" " + iconConvert + " Golter - File Converter" + versionInfo + " ")
 	s.WriteString("\n" + header + "\n\n")
 
 	switch m.state {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"golter/internal/tui"
+	"github.com/sametcn99/golter/internal/tui"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
