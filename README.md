@@ -112,6 +112,7 @@ task build
 | `task fmt`       | Formats the code                 |
 | `task build-all` | Cross-compiles for all platforms |
 | `task install`   | Installs to GOPATH/bin           |
+| `task test`      | Runs tests                       |
 
 ### Platform-Specific Setup
 
