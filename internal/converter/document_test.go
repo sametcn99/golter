@@ -20,7 +20,7 @@ func TestDocumentConverter_SupportedExtensions(t *testing.T) {
 	if len(srcExts) == 0 {
 		t.Error("SupportedSourceExtensions returned empty list")
 	}
-	expectedSrc := []string{".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
+	expectedSrc := []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
 	for _, exp := range expectedSrc {
 		found := false
 		for _, got := range srcExts {
@@ -295,6 +295,43 @@ func TestDocumentConverter_Convert_EbookFromMarkdownAndHTML(t *testing.T) {
 	}
 }
 
+func TestDocumentConverter_Convert_DocxPandoc(t *testing.T) {
+	if !ensurePandocInPath(t) {
+		t.Skip("pandoc not found, skipping DOCX conversion tests")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "golter_docx_test")
+	if err != nil {
+		t.Fatalf("failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tmpDir)
+
+	c := &DocumentConverter{}
+
+	mdPath := filepath.Join(tmpDir, "src.md")
+	if err := os.WriteFile(mdPath, []byte("# Title\n\nHello docx"), 0644); err != nil {
+		t.Fatalf("failed to write md: %v", err)
+	}
+
+	// MD -> DOCX
+	docxPath := filepath.Join(tmpDir, "out.docx")
+	if err := c.Convert(mdPath, docxPath, Options{}); err != nil {
+		t.Fatalf("Convert(MD->DOCX) failed: %v", err)
+	}
+	if _, err := os.Stat(docxPath); os.IsNotExist(err) {
+		t.Fatalf("Target DOCX not created: %s", docxPath)
+	}
+
+	// DOCX -> MD
+	backToMD := filepath.Join(tmpDir, "back.md")
+	if err := c.Convert(docxPath, backToMD, Options{}); err != nil {
+		t.Fatalf("Convert(DOCX->MD) failed: %v", err)
+	}
+	if _, err := os.Stat(backToMD); os.IsNotExist(err) {
+		t.Fatalf("Target MD not created: %s", backToMD)
+	}
+}
+
 func TestDocumentConverter_Name(t *testing.T) {
 	c := &DocumentConverter{}
 	if !strings.Contains(c.Name(), "Document Converter") {
@@ -317,13 +354,21 @@ func TestDocumentConverter_CanConvert(t *testing.T) {
 		// Markdown
 		{".md", ".pdf", true},
 		{".md", ".html", true},
+		{".md", ".docx", true},
 		{".md", ".epub", true},
 		{".md", ".txt", false},
 
 		// HTML
 		{".html", ".md", true},
+		{".html", ".docx", true},
 		{".html", ".epub", true},
 		{".html", ".pdf", false},
+
+		// DOCX
+		{".docx", ".md", true},
+		{".docx", ".html", true},
+		{".docx", ".txt", true},
+		{".docx", ".pdf", false},
 
 		// CSV/Excel
 		{".csv", ".xlsx", true},
@@ -364,8 +409,9 @@ func TestDocumentConverter_SupportedTargetFormats(t *testing.T) {
 		want []string
 	}{
 		{".pdf", []string{".md", ".pdf"}},
-		{".md", []string{".html", ".pdf", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}},
+		{".md", []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}},
 		{".csv", []string{".xlsx"}},
+		{".docx", []string{".md", ".html", ".txt"}},
 		{".epub", []string{".pdf", ".md", ".html", ".mobi", ".azw", ".azw3", ".fb2", ".txt"}},
 		{".mobi", []string{".epub", ".azw", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}},
 	}
@@ -425,6 +471,47 @@ func ensureEbookConvertInPath(t *testing.T) bool {
 			if !strings.Contains(current, dir) {
 				if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+current); err != nil {
 					t.Logf("failed to update PATH for ebook-convert: %v", err)
+					return false
+				}
+			}
+			return true
+		}
+	}
+
+	return false
+}
+
+func ensurePandocInPath(t *testing.T) bool {
+	binName := "pandoc"
+	if runtime.GOOS == "windows" {
+		binName = "pandoc.exe"
+	}
+
+	if _, err := exec.LookPath(binName); err == nil {
+		return true
+	}
+
+	var candidates []string
+	if runtime.GOOS == "windows" {
+		candidates = []string{
+			`C:\\Program Files\\Pandoc\\pandoc.exe`,
+			`C:\\Program Files (x86)\\Pandoc\\pandoc.exe`,
+		}
+	} else {
+		candidates = []string{
+			"/usr/bin/pandoc",
+			"/usr/local/bin/pandoc",
+			"/opt/homebrew/bin/pandoc",
+		}
+	}
+
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			dir := filepath.Dir(p)
+			current := os.Getenv("PATH")
+			if !strings.Contains(current, dir) {
+				if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+current); err != nil {
+					t.Logf("failed to update PATH for pandoc: %v", err)
 					return false
 				}
 			}

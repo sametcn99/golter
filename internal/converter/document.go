@@ -71,9 +71,11 @@ func (c *DocumentConverter) CanConvert(srcExt, targetExt string) bool {
 	case ".pdf":
 		return targetExt == ".md" || targetExt == ".pdf"
 	case ".md":
-		return targetExt == ".pdf" || targetExt == ".html" || isEbookExt(targetExt)
+		return targetExt == ".pdf" || targetExt == ".html" || targetExt == ".docx" || isEbookExt(targetExt)
 	case ".html":
-		return targetExt == ".md" || isEbookExt(targetExt)
+		return targetExt == ".md" || targetExt == ".docx" || isEbookExt(targetExt)
+	case ".docx":
+		return targetExt == ".md" || targetExt == ".html" || targetExt == ".txt"
 	case ".csv":
 		return targetExt == ".xlsx" || targetExt == ".xls"
 	case ".xlsx", ".xls":
@@ -88,7 +90,7 @@ func (c *DocumentConverter) CanConvert(srcExt, targetExt string) bool {
 }
 
 func (c *DocumentConverter) SupportedSourceExtensions() []string {
-	return []string{".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
+	return []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
 }
 
 func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
@@ -101,9 +103,11 @@ func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
 	case ".pdf":
 		return []string{".md", ".pdf"} // .pdf -> .pdf implies compression
 	case ".md":
-		return []string{".html", ".pdf", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
+		return []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
 	case ".html":
-		return []string{".md", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
+		return []string{".md", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
+	case ".docx":
+		return []string{".md", ".html", ".txt"}
 	case ".csv":
 		return []string{".xlsx"}
 	case ".xlsx", ".xls":
@@ -145,6 +149,8 @@ func (c *DocumentConverter) Convert(src, target string, opts Options) error {
 			return c.convertMarkdownToHTML(src, target)
 		} else if targetExt == ".pdf" {
 			return c.convertMarkdownToPDF(src, target)
+		} else if targetExt == ".docx" {
+			return c.convertWithPandoc(src, target, opts)
 		} else if targetExt == ".epub" {
 			return c.convertMarkdownToEPUB(src, target)
 		} else if isEbookExt(targetExt) {
@@ -153,10 +159,16 @@ func (c *DocumentConverter) Convert(src, target string, opts Options) error {
 	case ".html":
 		if targetExt == ".md" {
 			return c.convertHTMLToMarkdown(src, target)
+		} else if targetExt == ".docx" {
+			return c.convertWithPandoc(src, target, opts)
 		} else if targetExt == ".epub" {
 			return c.convertHTMLToEPUB(src, target)
 		} else if isEbookExt(targetExt) {
 			return c.convertHTMLToEbook(src, target, opts)
+		}
+	case ".docx":
+		if targetExt == ".md" || targetExt == ".html" || targetExt == ".txt" {
+			return c.convertWithPandoc(src, target, opts)
 		}
 	case ".csv":
 		if targetExt == ".xlsx" || targetExt == ".xls" {
@@ -466,6 +478,28 @@ func (c *DocumentConverter) convertEbookWithCalibre(src, target string, opts Opt
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ebook-convert failed: %w\nOutput: %s", err, string(output))
+	}
+
+	return nil
+}
+
+func (c *DocumentConverter) convertWithPandoc(src, target string, opts Options) error {
+	_, err := exec.LookPath("pandoc")
+	if err != nil {
+		return fmt.Errorf("pandoc not found: please install Pandoc to convert DOCX formats (https://pandoc.org)")
+	}
+
+	args := []string{src, "-o", target}
+	if extra, ok := opts["pandocArgs"].([]string); ok && len(extra) > 0 {
+		args = append(args, extra...)
+	} else if extraStr, ok := opts["pandocArgs"].(string); ok && strings.TrimSpace(extraStr) != "" {
+		args = append(args, strings.Fields(extraStr)...)
+	}
+
+	cmd := exec.Command("pandoc", args...)
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pandoc failed: %w\nOutput: %s", err, string(output))
 	}
 
 	return nil

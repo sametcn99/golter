@@ -11,7 +11,7 @@ import (
 
 // Current represents the current version of the application
 const (
-	Current = "0.1.1"
+	Current = "0.1.2"
 	Repo    = "sametcn99/golter"
 )
 

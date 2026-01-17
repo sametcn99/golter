@@ -62,7 +62,8 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 
 | Input                                     | Output                                                                    |
 |-------------------------------------------|---------------------------------------------------------------------------|
-| `.pdf`, `.md`, `.html`                    | `.pdf`, `.md`, `.html`, `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`         |
+| `.pdf`, `.md`, `.html`                    | `.pdf`, `.md`, `.html`, `.docx`, `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` |
+| `.docx`                                   | `.md`, `.html`, `.txt`                                                    |
 | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.pdf`, `.html`, `.txt`, `.md` |
 | `.csv`                                    | `.xlsx`                                                                   |
 | `.xlsx`, `.xls`                           | `.csv`                                                                    |
@@ -73,16 +74,22 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 - Markdown to styled HTML with responsive design
 - Markdown/HTML to EPUB conversion
 - EPUB/MOBI/AZW/AZW3/FB2 conversions via Calibre (if installed)
+- DOCX conversions via Pandoc (if installed)
 - PDF compression/optimization
 - CSV to Excel conversion with styled headers and auto-fit columns
 - Excel to CSV export (exports first sheet)
 
-> **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`.
+> **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`. DOCX conversions require Pandoc.
 
 **PATH Note (ebook-convert):**
 - **Linux:** Typically available at `/usr/bin/ebook-convert` (or `/snap/bin/ebook-convert`). Ensure the directory is on `PATH`.
 - **macOS (Homebrew):** `/opt/homebrew/bin/ebook-convert` (Apple Silicon) or `/usr/local/bin/ebook-convert` (Intel).
 - **Windows:** `C:\Program Files\Calibre2\ebook-convert.exe` (or `C:\Program Files (x86)\Calibre2\ebook-convert.exe`). Add the folder to `PATH` if not detected.
+
+**PATH Note (pandoc):**
+- **Linux:** Typically available at `/usr/bin/pandoc` or `/usr/local/bin/pandoc`.
+- **macOS (Homebrew):** `/opt/homebrew/bin/pandoc` (Apple Silicon) or `/usr/local/bin/pandoc` (Intel).
+- **Windows:** `C:\Program Files\Pandoc\pandoc.exe` (or `C:\Program Files (x86)\Pandoc\pandoc.exe`). Add the folder to `PATH` if not detected.
 
 ## Installation
 
@@ -91,6 +98,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 - **Go 1.21+**
 - **ffmpeg** (required for video/audio conversion)
 - **Calibre (ebook-convert)** (required for ebook conversions beyond EPUB)
+- **Pandoc** (required for DOCX conversions)
 
 ### Quick Install
 
@@ -129,13 +137,13 @@ task build
 
 ```bash
 # Ubuntu/Debian
-sudo apt update && sudo apt install ffmpeg calibre
+sudo apt update && sudo apt install ffmpeg calibre pandoc
 
 # Fedora
-sudo dnf install ffmpeg calibre
+sudo dnf install ffmpeg calibre pandoc
 
 # Arch Linux
-sudo pacman -S ffmpeg calibre
+sudo pacman -S ffmpeg calibre pandoc
 
 # Build
 go build -o golter main.go
@@ -156,6 +164,9 @@ brew install ffmpeg
 # Install Calibre (ebook-convert)
 brew install --cask calibre
 
+# Install Pandoc
+brew install pandoc
+
 # Build
 go build -o golter main.go
 
@@ -175,11 +186,17 @@ winget install ffmpeg
 # Calibre (ebook-convert)
 winget install calibre.calibre
 
+# Pandoc
+winget install --id JohnMacFarlane.Pandoc
+
 # Or using chocolatey
 choco install ffmpeg
 
 # Calibre (ebook-convert)
 choco install calibre
+
+# Pandoc
+choco install pandoc
 
 # Build
 go build -o golter.exe main.go
