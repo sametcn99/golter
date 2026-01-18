@@ -46,6 +46,7 @@ func NewModel(initialPath string) Model {
 	mgr.Register(&converter.ImageConverter{})
 	mgr.Register(&converter.VideoConverter{})
 	mgr.Register(&converter.DocumentConverter{})
+	mgr.Register(&converter.DocDataConverter{})
 	mgr.Register(&converter.AudioConverter{})
 
 	if initialPath == "" {

@@ -9,12 +9,15 @@ require (
 	github.com/charmbracelet/bubbles v0.21.0
 	github.com/charmbracelet/bubbletea v1.3.10
 	github.com/charmbracelet/lipgloss v1.1.0
+	github.com/clbanning/mxj/v2 v2.7.0
 	github.com/go-pdf/fpdf v0.9.0
 	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/pdfcpu/pdfcpu v0.11.1
+	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/taylorskalyo/goreader v1.0.1
 	github.com/xuri/excelize/v2 v2.10.0
 	github.com/yuin/goldmark v1.7.16
+	gopkg.in/yaml.v3 v3.0.1
 )
 
 require (
@@ -31,6 +34,7 @@ require (
 	github.com/erikgeiser/coninput v0.0.0-20211004153227-1c3628e74d0f // indirect
 	github.com/gabriel-vasile/mimetype v1.3.1 // indirect
 	github.com/gofrs/uuid v3.1.0+incompatible // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
 	github.com/hhrutter/tiff v1.0.2 // indirect

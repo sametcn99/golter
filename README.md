@@ -4,6 +4,24 @@
 
 Terminal-based file converter built with Go. It provides a modern, user-friendly Terminal User Interface (TUI) for batch converting images, videos, audio, and documents between various formats.
 
+## Table of Contents
+
+- [Features](#features)
+- [Supported Formats](#supported-formats)
+  - [Images](#images)
+  - [Videos](#videos)
+  - [Audio](#audio)
+  - [Documents](#documents)
+- [Installation](#installation)
+  - [Prerequisites](#prerequisites)
+  - [Quick Install](#quick-install)
+  - [Build from Source](#build-from-source)
+  - [Platform-Specific Setup](#platform-specific-setup)
+- [Usage](#usage)
+  - [Keyboard Controls](#keyboard-controls)
+- [Notes](#notes)
+- [License](#license)
+
 ## Features
 
 - **Modern TUI Interface:** Beautiful terminal interface with smooth animations and visual feedback.
@@ -11,7 +29,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 - **Image Conversion:** Native Go implementation for high-performance image processing with quality control.
 - **Video Conversion:** Leverages `ffmpeg` for robust video format support with optimized encoding presets.
 - **Audio Conversion:** Convert between various audio formats using `ffmpeg` with bitrate control.
-- **Document Conversion:** Support for PDF, Markdown, HTML, and EPUB conversions.
+- **Document Conversion:** Support for PDF, Markdown, HTML, EPUB, and doc data conversions (JSON/YAML/XML/TOML/CSV/Excel).
 - **Keyboard Navigation:** Full keyboard support with Vim-like keybindings (`j`/`k`, `h`/`l`).
 - **Cross-Platform:** Works on Linux, macOS, and Windows.
 - **Compression Options:** Choose from High, Balanced, or Compact quality levels.
@@ -58,15 +76,23 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 - FLAC lossless support
 - Opus/Vorbis encoding for OGG
 
+> **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`. DOCX conversions require Pandoc.
+
 ### Documents
 
-| Input                                     | Output                                                                    |
-|-------------------------------------------|---------------------------------------------------------------------------|
+| Input                                     | Output                                                                     |
+|-------------------------------------------|----------------------------------------------------------------------------|
 | `.pdf`, `.md`, `.html`                    | `.pdf`, `.md`, `.html`, `.docx`, `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` |
-| `.docx`                                   | `.md`, `.html`, `.txt`                                                    |
-| `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.pdf`, `.html`, `.txt`, `.md` |
-| `.csv`                                    | `.xlsx`                                                                   |
-| `.xlsx`, `.xls`                           | `.csv`                                                                    |
+| `.docx`                                   | `.md`, `.html`, `.txt`                                                     |
+| `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.pdf`, `.html`, `.txt`, `.md`  |
+| `.csv`                                    | `.xlsx`                                                                    |
+| `.xlsx`, `.xls`                           | `.csv`                                                                     |
+| `.json`                                   | `.yaml`, `.yml`, `.xml`, `.csv`, `.xlsx`, `.xls`                           |
+| `.yaml`, `.yml`                           | `.json`, `.toml`                                                           |
+| `.toml`                                   | `.yaml`, `.yml`                                                            |
+| `.xml`                                    | `.json`                                                                    |
+| `.csv`                                    | `.json`                                                                    |
+| `.xlsx`, `.xls`                           | `.json`                                                                    |
 
 **Features:**
 
@@ -78,18 +104,10 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 - PDF compression/optimization
 - CSV to Excel conversion with styled headers and auto-fit columns
 - Excel to CSV export (exports first sheet)
-
-> **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`. DOCX conversions require Pandoc.
-
-**PATH Note (ebook-convert):**
-- **Linux:** Typically available at `/usr/bin/ebook-convert` (or `/snap/bin/ebook-convert`). Ensure the directory is on `PATH`.
-- **macOS (Homebrew):** `/opt/homebrew/bin/ebook-convert` (Apple Silicon) or `/usr/local/bin/ebook-convert` (Intel).
-- **Windows:** `C:\Program Files\Calibre2\ebook-convert.exe` (or `C:\Program Files (x86)\Calibre2\ebook-convert.exe`). Add the folder to `PATH` if not detected.
-
-**PATH Note (pandoc):**
-- **Linux:** Typically available at `/usr/bin/pandoc` or `/usr/local/bin/pandoc`.
-- **macOS (Homebrew):** `/opt/homebrew/bin/pandoc` (Apple Silicon) or `/usr/local/bin/pandoc` (Intel).
-- **Windows:** `C:\Program Files\Pandoc\pandoc.exe` (or `C:\Program Files (x86)\Pandoc\pandoc.exe`). Add the folder to `PATH` if not detected.
+- JSON ↔ YAML conversion (preserves nested data)
+- JSON ↔ XML conversion with automatic root wrapping
+- JSON ↔ CSV / Excel (first sheet) conversions
+- YAML ↔ TOML conversion
 
 ## Installation
 
@@ -239,6 +257,20 @@ Start in a specific directory:
 | `G`       | Go to bottom                  |
 | `Esc`     | Go back / Cancel              |
 | `q`       | Quit application              |
+
+## Notes
+
+**PATH Note (ebook-convert):**
+
+- **Linux:** Typically available at `/usr/bin/ebook-convert` (or `/snap/bin/ebook-convert`). Ensure the directory is on `PATH`.
+- **macOS (Homebrew):** `/opt/homebrew/bin/ebook-convert` (Apple Silicon) or `/usr/local/bin/ebook-convert` (Intel).
+- **Windows:** `C:\Program Files\Calibre2\ebook-convert.exe` (or `C:\Program Files (x86)\Calibre2\ebook-convert.exe`). Add the folder to `PATH` if not detected.
+
+**PATH Note (pandoc):**
+
+- **Linux:** Typically available at `/usr/bin/pandoc` or `/usr/local/bin/pandoc`.
+- **macOS (Homebrew):** `/opt/homebrew/bin/pandoc` (Apple Silicon) or `/usr/local/bin/pandoc` (Intel).
+- **Windows:** `C:\Program Files\Pandoc\pandoc.exe` (or `C:\Program Files (x86)\Pandoc\pandoc.exe`). Add the folder to `PATH` if not detected.
 
 ## License
 
