@@ -49,7 +49,7 @@ func (m *MockConverter) Convert(src, target string, opts Options) error {
 func TestNewManager(t *testing.T) {
 	m := NewManager()
 	if m == nil {
-		t.Error("NewManager returned nil")
+		t.Fatalf("NewManager returned nil")
 	}
 	if len(m.converters) != 0 {
 		t.Errorf("NewManager should have 0 converters, got %d", len(m.converters))

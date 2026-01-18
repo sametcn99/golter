@@ -22,10 +22,7 @@ func TestNewModel(t *testing.T) {
 
 func TestModel_Init(t *testing.T) {
 	m := NewModel(".")
-	cmd := m.Init()
-	if cmd == nil {
-		// Init usually returns nil or a command
-	}
+	_ = m.Init()
 }
 
 func TestModel_Update(t *testing.T) {
@@ -33,7 +30,7 @@ func TestModel_Update(t *testing.T) {
 
 	// Test window resize
 	msg := tea.WindowSizeMsg{Width: 100, Height: 50}
-	updatedModel, cmd := m.Update(msg)
+	updatedModel, _ := m.Update(msg)
 
 	newM, ok := updatedModel.(Model)
 	if !ok {
@@ -42,9 +39,6 @@ func TestModel_Update(t *testing.T) {
 
 	if newM.width != 100 || newM.height != 50 {
 		t.Errorf("Window size not updated. Got %dx%d", newM.width, newM.height)
-	}
-	if cmd != nil {
-		// Resize usually doesn't return a command
 	}
 }
 
