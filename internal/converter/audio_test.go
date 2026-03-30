@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,7 +50,7 @@ func TestAudioConverter_Convert_Error(t *testing.T) {
 	c := &AudioConverter{}
 
 	// Test non-existent file
-	err := c.Convert("non_existent.wav", "out.mp3", Options{})
+	err := c.Convert(context.Background(), "non_existent.wav", "out.mp3", Options{})
 	if err == nil {
 		t.Error("Convert should fail for non-existent file")
 	}
@@ -99,8 +100,8 @@ func TestAudioConverter_Convert_Integration_Exhaustive(t *testing.T) {
 					targetName := fmt.Sprintf("out_%s_%s%s", srcExt[1:], quality, targetExt)
 					targetPath := filepath.Join(tmpDir, targetName)
 
-					opts := Options{"quality": quality}
-					err := c.Convert(srcPath, targetPath, opts)
+					opts := Options{Quality: quality}
+					err := c.Convert(context.Background(), srcPath, targetPath, opts)
 					if err != nil {
 						t.Errorf("Convert failed: %v", err)
 						return
@@ -150,8 +151,8 @@ func TestParseAudioQuality(t *testing.T) {
 		want audioQuality
 	}{
 		{"Default", Options{}, audioQuality{bitrate: "192k", sampleRate: "44100"}},
-		{"High", Options{"quality": "High"}, audioQuality{bitrate: "320k", sampleRate: "48000"}},
-		{"Compact", Options{"quality": "Compact"}, audioQuality{bitrate: "128k", sampleRate: "44100"}},
+		{"High", Options{Quality: "High"}, audioQuality{bitrate: "320k", sampleRate: "48000"}},
+		{"Compact", Options{Quality: "Compact"}, audioQuality{bitrate: "128k", sampleRate: "44100"}},
 	}
 
 	for _, tt := range tests {

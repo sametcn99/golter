@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -34,7 +35,7 @@ func (c *AudioConverter) SupportedTargetFormats(srcExt string) []string {
 	return []string{".mp3", ".wav", ".ogg", ".flac", ".m4a", ".aac"}
 }
 
-func (c *AudioConverter) Convert(src, target string, opts Options) error {
+func (c *AudioConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	// Check if ffmpeg is installed
 	_, err := exec.LookPath("ffmpeg")
 	if err != nil {
@@ -48,7 +49,7 @@ func (c *AudioConverter) Convert(src, target string, opts Options) error {
 	args := buildAudioFFmpegArgs(src, target, quality)
 
 	// Execute ffmpeg
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ffmpeg conversion failed: %w\nOutput: %s", err, string(output))
@@ -70,7 +71,8 @@ func parseAudioQuality(opts Options) audioQuality {
 		sampleRate: "44100", // CD quality
 	}
 
-	if qualityStr, ok := opts["quality"].(string); ok {
+	qualityStr := opts.Quality
+	if qualityStr != "" {
 		switch {
 		case strings.Contains(qualityStr, "High"):
 			q.bitrate = "320k"

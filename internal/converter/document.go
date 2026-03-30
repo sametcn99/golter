@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -114,7 +115,7 @@ func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
 	return nil
 }
 
-func (c *DocumentConverter) Convert(src, target string, opts Options) error {
+func (c *DocumentConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	srcExt := strings.ToLower(filepath.Ext(src))
 	targetExt := strings.ToLower(filepath.Ext(target))
 
@@ -126,67 +127,67 @@ func (c *DocumentConverter) Convert(src, target string, opts Options) error {
 	switch srcExt {
 	case ".pdf":
 		if targetExt == ".md" {
-			return c.convertPDFToMarkdown(src, target)
+			return c.convertPDFToMarkdown(ctx, src, target)
 		} else if targetExt == ".pdf" {
-			return c.compressPDF(src, target)
+			return c.compressPDF(ctx, src, target)
 		}
 	case ".md":
 		if targetExt == ".html" {
-			return c.convertMarkdownToHTML(src, target)
+			return c.convertMarkdownToHTML(ctx, src, target)
 		} else if targetExt == ".pdf" {
-			return c.convertMarkdownToPDF(src, target)
+			return c.convertMarkdownToPDF(ctx, src, target)
 		} else if targetExt == ".docx" {
-			return c.convertWithPandoc(src, target, opts)
+			return c.convertWithPandoc(ctx, src, target, opts)
 		} else if targetExt == ".epub" {
-			return c.convertMarkdownToEPUB(src, target)
+			return c.convertMarkdownToEPUB(ctx, src, target)
 		} else if isEbookExt(targetExt) {
-			return c.convertMarkdownToEbook(src, target, opts)
+			return c.convertMarkdownToEbook(ctx, src, target, opts)
 		}
 	case ".html":
 		if targetExt == ".md" {
-			return c.convertHTMLToMarkdown(src, target)
+			return c.convertHTMLToMarkdown(ctx, src, target)
 		} else if targetExt == ".docx" {
-			return c.convertWithPandoc(src, target, opts)
+			return c.convertWithPandoc(ctx, src, target, opts)
 		} else if targetExt == ".epub" {
-			return c.convertHTMLToEPUB(src, target)
+			return c.convertHTMLToEPUB(ctx, src, target)
 		} else if isEbookExt(targetExt) {
-			return c.convertHTMLToEbook(src, target, opts)
+			return c.convertHTMLToEbook(ctx, src, target, opts)
 		}
 	case ".docx":
 		if targetExt == ".md" || targetExt == ".html" || targetExt == ".txt" {
-			return c.convertWithPandoc(src, target, opts)
+			return c.convertWithPandoc(ctx, src, target, opts)
 		}
 	case ".csv":
 		if targetExt == ".xlsx" || targetExt == ".xls" {
-			return c.convertCSVToExcel(src, target)
+			return c.convertCSVToExcel(ctx, src, target)
 		}
 	case ".xlsx", ".xls":
 		if targetExt == ".csv" {
-			return c.convertExcelToCSV(src, target)
+			return c.convertExcelToCSV(ctx, src, target)
 		}
 	case ".epub":
 		if targetExt == srcExt {
 			break
 		}
 		if targetExt == ".md" {
-			return c.convertEPUBToMarkdown(src, target)
+			return c.convertEPUBToMarkdown(ctx, src, target)
 		} else if targetExt == ".html" {
-			return c.convertEPUBToHTML(src, target)
+			return c.convertEPUBToHTML(ctx, src, target)
 		} else if targetExt == ".pdf" {
-			return c.convertEPUBToPDF(src, target)
+			return c.convertEPUBToPDF(ctx, src, target)
 		} else if isEbookExt(targetExt) {
-			return c.convertEbookWithCalibre(src, target, opts)
+			return c.convertEbookWithCalibre(ctx, src, target, opts)
 		} else if targetExt == ".txt" {
-			return c.convertEbookWithCalibre(src, target, opts)
+			return c.convertEbookWithCalibre(ctx, src, target, opts)
 		}
 	case ".mobi", ".azw", ".azw3", ".fb2":
 		if targetExt == srcExt {
 			break
 		}
 		if targetExt == ".md" {
-			return c.convertEbookToMarkdown(src, target, opts)
+			return c.convertEbookToMarkdown(ctx, src, target, opts)
 		} else if targetExt == ".html" || targetExt == ".pdf" || targetExt == ".txt" || isEbookExt(targetExt) {
-			return c.convertEbookWithCalibre(src, target, opts)
+			return c.convertEbookWithCalibre(ctx, src, target, opts)
 		}
 	}
 

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -52,19 +53,19 @@ func TestDocumentConverter_Convert_Error(t *testing.T) {
 	c := &DocumentConverter{}
 
 	// Test non-existent file
-	err := c.Convert("non_existent.md", "out.html", Options{})
+	err := c.Convert(context.Background(), "non_existent.md", "out.html", Options{})
 	if err == nil {
 		t.Error("Convert should fail for non-existent file")
 	}
 
 	// Test unsupported conversion
-	_ = c.Convert("test.md", "out.jpg", Options{}) // File existence check is first, so create dummy
+	_ = c.Convert(context.Background(), "test.md", "out.jpg", Options{}) // File existence check is first, so create dummy
 	if err := os.WriteFile("test.md", []byte("test"), 0644); err != nil {
 		t.Fatalf("failed to write test file: %v", err)
 	}
 	defer os.Remove("test.md")
 
-	err = c.Convert("test.md", "out.jpg", Options{})
+	err = c.Convert(context.Background(), "test.md", "out.jpg", Options{})
 	if err == nil {
 		t.Error("Convert should fail for unsupported conversion")
 	} else if !strings.Contains(err.Error(), "unsupported conversion") {

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -294,7 +295,7 @@ func convertFilesWithProgress(files []string, targetExt string, quality string, 
 		var completed int32
 
 		opts := converter.Options{
-			"quality": quality,
+			Quality: quality,
 		}
 
 		// Determine optimal concurrency based on file count
@@ -347,7 +348,7 @@ func convertFilesWithProgress(files []string, targetExt string, quality string, 
 					}
 				}
 
-				err = conv.Convert(path, outputPath, opts)
+				err = conv.Convert(context.Background(), path, outputPath, opts)
 				duration := time.Since(fileStart)
 
 				mu.Lock()

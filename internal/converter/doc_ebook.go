@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -13,34 +14,32 @@ import (
 	"github.com/taylorskalyo/goreader/epub"
 )
 
-func (c *DocumentConverter) convertEbookToMarkdown(src, target string, opts Options) error {
+func (c *DocumentConverter) convertEbookToMarkdown(ctx context.Context, src, target string, opts Options) error {
 	tempHTML, cleanup, err := tempPathWithExt("golter_ebook_html", ".html")
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := c.convertEbookWithCalibre(src, tempHTML, opts); err != nil {
+	if err := c.convertEbookWithCalibre(ctx, src, tempHTML, opts); err != nil {
 		return err
 	}
 
-	return c.convertHTMLToMarkdown(tempHTML, target)
+	return c.convertHTMLToMarkdown(ctx, tempHTML, target)
 }
 
-func (c *DocumentConverter) convertEbookWithCalibre(src, target string, opts Options) error {
+func (c *DocumentConverter) convertEbookWithCalibre(ctx context.Context, src, target string, opts Options) error {
 	_, err := exec.LookPath("ebook-convert")
 	if err != nil {
 		return fmt.Errorf("ebook-convert not found: please install Calibre to convert ebook formats (https://calibre-ebook.com)")
 	}
 
 	args := []string{src, target}
-	if extra, ok := opts["ebookArgs"].([]string); ok && len(extra) > 0 {
-		args = append(args, extra...)
-	} else if extraStr, ok := opts["ebookArgs"].(string); ok && strings.TrimSpace(extraStr) != "" {
-		args = append(args, strings.Fields(extraStr)...)
+	if len(opts.EbookArgs) > 0 {
+		args = append(args, opts.EbookArgs...)
 	}
 
-	cmd := exec.Command("ebook-convert", args...)
+	cmd := exec.CommandContext(ctx, "ebook-convert", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ebook-convert failed: %w\nOutput: %s", err, string(output))
@@ -49,7 +48,7 @@ func (c *DocumentConverter) convertEbookWithCalibre(src, target string, opts Opt
 	return nil
 }
 
-func (c *DocumentConverter) convertEPUBToMarkdown(src, target string) error {
+func (c *DocumentConverter) convertEPUBToMarkdown(ctx context.Context, src, target string) error {
 	rc, err := epub.OpenReader(src)
 	if err != nil {
 		return fmt.Errorf("failed to open EPUB: %w", err)
@@ -108,7 +107,7 @@ func (c *DocumentConverter) convertEPUBToMarkdown(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertEPUBToHTML(src, target string) error {
+func (c *DocumentConverter) convertEPUBToHTML(ctx context.Context, src, target string) error {
 	rc, err := epub.OpenReader(src)
 	if err != nil {
 		return fmt.Errorf("failed to open EPUB: %w", err)
@@ -180,15 +179,15 @@ func extractBodyContent(html string) string {
 	return strings.TrimSpace(html[contentStart:bodyEnd])
 }
 
-func (c *DocumentConverter) convertEPUBToPDF(src, target string) error {
+func (c *DocumentConverter) convertEPUBToPDF(ctx context.Context, src, target string) error {
 	// Use Calibre ebook-convert as primary (produces best quality)
 	if _, err := exec.LookPath("ebook-convert"); err == nil {
-		return c.convertEbookWithCalibre(src, target, nil)
+		return c.convertEbookWithCalibre(ctx, src, target, Options{})
 	}
 
 	// Fallback: EPUB → HTML → PDF using fpdf (limited tag support)
 	tempHTML := strings.TrimSuffix(target, filepath.Ext(target)) + "_temp.html"
-	if err := c.convertEPUBToHTML(src, tempHTML); err != nil {
+	if err := c.convertEPUBToHTML(ctx, src, tempHTML); err != nil {
 		return err
 	}
 	defer os.Remove(tempHTML)

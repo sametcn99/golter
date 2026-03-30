@@ -1,29 +1,27 @@
 package converter
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"os"
 	"os/exec"
-	"strings"
 
 	"github.com/xuri/excelize/v2"
 )
 
-func (c *DocumentConverter) convertWithPandoc(src, target string, opts Options) error {
+func (c *DocumentConverter) convertWithPandoc(ctx context.Context, src, target string, opts Options) error {
 	_, err := exec.LookPath("pandoc")
 	if err != nil {
 		return fmt.Errorf("pandoc not found: please install Pandoc to convert DOCX formats (https://pandoc.org)")
 	}
 
 	args := []string{src, "-o", target}
-	if extra, ok := opts["pandocArgs"].([]string); ok && len(extra) > 0 {
-		args = append(args, extra...)
-	} else if extraStr, ok := opts["pandocArgs"].(string); ok && strings.TrimSpace(extraStr) != "" {
-		args = append(args, strings.Fields(extraStr)...)
+	if len(opts.PandocArgs) > 0 {
+		args = append(args, opts.PandocArgs...)
 	}
 
-	cmd := exec.Command("pandoc", args...)
+	cmd := exec.CommandContext(ctx, "pandoc", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("pandoc failed: %w\nOutput: %s", err, string(output))
@@ -33,7 +31,7 @@ func (c *DocumentConverter) convertWithPandoc(src, target string, opts Options) 
 }
 
 // convertCSVToExcel converts a CSV file to Excel format
-func (c *DocumentConverter) convertCSVToExcel(src, target string) error {
+func (c *DocumentConverter) convertCSVToExcel(ctx context.Context, src, target string) error {
 	// Open CSV file
 	csvFile, err := os.Open(src)
 	if err != nil {
@@ -123,7 +121,7 @@ func (c *DocumentConverter) convertCSVToExcel(src, target string) error {
 }
 
 // convertExcelToCSV converts an Excel file to CSV format
-func (c *DocumentConverter) convertExcelToCSV(src, target string) error {
+func (c *DocumentConverter) convertExcelToCSV(ctx context.Context, src, target string) error {
 	// Open Excel file
 	f, err := excelize.OpenFile(src)
 	if err != nil {

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,21 +20,21 @@ func TestDocumentConverter_EPUB(t *testing.T) {
 
 	t.Run("EPUB->MD", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "epub_out.md")
-		if err := c.Convert(epubPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), epubPath, target, Options{}); err != nil {
 			t.Errorf("Convert(EPUB->MD) failed: %v", err)
 		}
 	})
 
 	t.Run("EPUB->HTML", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "epub_out.html")
-		if err := c.Convert(epubPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), epubPath, target, Options{}); err != nil {
 			t.Errorf("Convert(EPUB->HTML) failed: %v", err)
 		}
 	})
 
 	t.Run("EPUB->PDF", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "epub_out.pdf")
-		if err := c.Convert(epubPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), epubPath, target, Options{}); err != nil {
 			t.Errorf("Convert(EPUB->PDF) failed: %v", err)
 		}
 	})
@@ -58,7 +59,7 @@ func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
 
 	t.Run("EPUB->MOBI", func(t *testing.T) {
 		mobiPath := filepath.Join(tmpDir, "test.mobi")
-		if err := c.Convert(epubPath, mobiPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), epubPath, mobiPath, Options{}); err != nil {
 			t.Fatalf("Convert(EPUB->MOBI) failed: %v", err)
 		}
 		if _, err := os.Stat(mobiPath); os.IsNotExist(err) {
@@ -69,7 +70,7 @@ func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
 	t.Run("MOBI->EPUB", func(t *testing.T) {
 		mobiPath := filepath.Join(tmpDir, "test.mobi")
 		backToEPUB := filepath.Join(tmpDir, "back.epub")
-		if err := c.Convert(mobiPath, backToEPUB, Options{}); err != nil {
+		if err := c.Convert(context.Background(), mobiPath, backToEPUB, Options{}); err != nil {
 			t.Fatalf("Convert(MOBI->EPUB) failed: %v", err)
 		}
 		if _, err := os.Stat(backToEPUB); os.IsNotExist(err) {
@@ -79,7 +80,7 @@ func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
 
 	t.Run("EPUB->AZW3", func(t *testing.T) {
 		azw3Path := filepath.Join(tmpDir, "test.azw3")
-		if err := c.Convert(epubPath, azw3Path, Options{}); err != nil {
+		if err := c.Convert(context.Background(), epubPath, azw3Path, Options{}); err != nil {
 			t.Fatalf("Convert(EPUB->AZW3) failed: %v", err)
 		}
 		if _, err := os.Stat(azw3Path); os.IsNotExist(err) {
@@ -107,7 +108,7 @@ func TestDocumentConverter_Convert_EbookFromMarkdownAndHTML(t *testing.T) {
 			t.Fatalf("failed to write md: %v", err)
 		}
 		mobiPath := filepath.Join(tmpDir, "md_out.mobi")
-		if err := c.Convert(mdPath, mobiPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), mdPath, mobiPath, Options{}); err != nil {
 			t.Fatalf("Convert(MD->MOBI) failed: %v", err)
 		}
 		if _, err := os.Stat(mobiPath); os.IsNotExist(err) {
@@ -121,7 +122,7 @@ func TestDocumentConverter_Convert_EbookFromMarkdownAndHTML(t *testing.T) {
 			t.Fatalf("failed to write html: %v", err)
 		}
 		azw3Path := filepath.Join(tmpDir, "html_out.azw3")
-		if err := c.Convert(htmlPath, azw3Path, Options{}); err != nil {
+		if err := c.Convert(context.Background(), htmlPath, azw3Path, Options{}); err != nil {
 			t.Fatalf("Convert(HTML->AZW3) failed: %v", err)
 		}
 		if _, err := os.Stat(azw3Path); os.IsNotExist(err) {

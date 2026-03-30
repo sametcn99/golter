@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -53,57 +54,57 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 
 	t.Run("JSON->YAML", func(t *testing.T) {
 		yamlPath := filepath.Join(tmpDir, "sample.yaml")
-		if err := c.Convert(jsonPath, yamlPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, yamlPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->YAML) failed: %v", err)
 		}
 	})
 
 	t.Run("YAML->JSON", func(t *testing.T) {
 		yamlPath := filepath.Join(tmpDir, "sample.yaml")
-		if err := c.Convert(jsonPath, yamlPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, yamlPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->YAML) failed: %v", err)
 		}
 
 		jsonFromYaml := filepath.Join(tmpDir, "from_yaml.json")
-		if err := c.Convert(yamlPath, jsonFromYaml, Options{}); err != nil {
+		if err := c.Convert(context.Background(), yamlPath, jsonFromYaml, Options{}); err != nil {
 			t.Fatalf("Convert(YAML->JSON) failed: %v", err)
 		}
 	})
 
 	t.Run("JSON->XML", func(t *testing.T) {
 		xmlPath := filepath.Join(tmpDir, "sample.xml")
-		if err := c.Convert(jsonPath, xmlPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, xmlPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->XML) failed: %v", err)
 		}
 	})
 
 	t.Run("XML->JSON", func(t *testing.T) {
 		xmlPath := filepath.Join(tmpDir, "sample.xml")
-		if err := c.Convert(jsonPath, xmlPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, xmlPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->XML) failed: %v", err)
 		}
 
 		jsonFromXml := filepath.Join(tmpDir, "from_xml.json")
-		if err := c.Convert(xmlPath, jsonFromXml, Options{}); err != nil {
+		if err := c.Convert(context.Background(), xmlPath, jsonFromXml, Options{}); err != nil {
 			t.Fatalf("Convert(XML->JSON) failed: %v", err)
 		}
 	})
 
 	t.Run("JSON->CSV", func(t *testing.T) {
 		csvPath := filepath.Join(tmpDir, "sample.csv")
-		if err := c.Convert(jsonPath, csvPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, csvPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->CSV) failed: %v", err)
 		}
 	})
 
 	t.Run("CSV->JSON", func(t *testing.T) {
 		csvPath := filepath.Join(tmpDir, "sample.csv")
-		if err := c.Convert(jsonPath, csvPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, csvPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->CSV) failed: %v", err)
 		}
 
 		jsonFromCSV := filepath.Join(tmpDir, "from_csv.json")
-		if err := c.Convert(csvPath, jsonFromCSV, Options{}); err != nil {
+		if err := c.Convert(context.Background(), csvPath, jsonFromCSV, Options{}); err != nil {
 			t.Fatalf("Convert(CSV->JSON) failed: %v", err)
 		}
 
@@ -119,19 +120,19 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 
 	t.Run("JSON->XLSX", func(t *testing.T) {
 		xlsxPath := filepath.Join(tmpDir, "sample.xlsx")
-		if err := c.Convert(jsonPath, xlsxPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, xlsxPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->XLSX) failed: %v", err)
 		}
 	})
 
 	t.Run("XLSX->JSON", func(t *testing.T) {
 		xlsxPath := filepath.Join(tmpDir, "sample.xlsx")
-		if err := c.Convert(jsonPath, xlsxPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), jsonPath, xlsxPath, Options{}); err != nil {
 			t.Fatalf("Convert(JSON->XLSX) failed: %v", err)
 		}
 
 		jsonFromXlsx := filepath.Join(tmpDir, "from_xlsx.json")
-		if err := c.Convert(xlsxPath, jsonFromXlsx, Options{}); err != nil {
+		if err := c.Convert(context.Background(), xlsxPath, jsonFromXlsx, Options{}); err != nil {
 			t.Fatalf("Convert(XLSX->JSON) failed: %v", err)
 		}
 	})
@@ -144,7 +145,7 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 		}
 
 		tomlPath := filepath.Join(tmpDir, "sample.toml")
-		if err := c.Convert(yamlPath, tomlPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), yamlPath, tomlPath, Options{}); err != nil {
 			t.Fatalf("Convert(YAML->TOML) failed: %v", err)
 		}
 	})
@@ -157,7 +158,7 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 		}
 
 		yamlFromToml := filepath.Join(tmpDir, "from_toml.yaml")
-		if err := c.Convert(tomlPath, yamlFromToml, Options{}); err != nil {
+		if err := c.Convert(context.Background(), tomlPath, yamlFromToml, Options{}); err != nil {
 			t.Fatalf("Convert(TOML->YAML) failed: %v", err)
 		}
 

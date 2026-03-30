@@ -1,7 +1,13 @@
 package converter
 
-// Options is a map of options for the conversion.
-type Options map[string]interface{}
+import "context"
+
+// Options holds parameters for the conversion.
+type Options struct {
+	Quality    string
+	PandocArgs []string
+	EbookArgs  []string
+}
 
 // Converter is the interface that all converters must implement.
 type Converter interface {
@@ -14,5 +20,5 @@ type Converter interface {
 	// SupportedTargetFormats returns a list of target extensions supported for the given source extension.
 	SupportedTargetFormats(srcExt string) []string
 	// Convert performs the conversion.
-	Convert(src, target string, opts Options) error
+	Convert(ctx context.Context, src, target string, opts Options) error
 }

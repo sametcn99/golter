@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/color"
@@ -75,8 +76,8 @@ func TestImageConverter_Convert_Integration_Exhaustive(t *testing.T) {
 					targetName := fmt.Sprintf("out_%s_%s%s", srcExt[1:], quality, targetExt)
 					targetPath := filepath.Join(tmpDir, targetName)
 
-					opts := Options{"quality": quality}
-					err := c.Convert(srcPath, targetPath, opts)
+					opts := Options{Quality: quality}
+					err := c.Convert(context.Background(), srcPath, targetPath, opts)
 					if err != nil {
 						t.Errorf("Convert failed: %v", err)
 						return
@@ -166,13 +167,12 @@ func TestParseQuality(t *testing.T) {
 		want int
 	}{
 		{"Default", Options{}, 80},
-		{"High", Options{"quality": "High"}, 92},
-		{"Balanced", Options{"quality": "Balanced"}, 75},
-		{"Medium", Options{"quality": "Medium"}, 75},
-		{"Compact", Options{"quality": "Compact"}, 55},
-		{"Low", Options{"quality": "Low"}, 55},
-		{"Unknown", Options{"quality": "Super"}, 80},
-		{"NotString", Options{"quality": 123}, 80},
+		{"High", Options{Quality: "High"}, 92},
+		{"Balanced", Options{Quality: "Balanced"}, 75},
+		{"Medium", Options{Quality: "Medium"}, 75},
+		{"Compact", Options{Quality: "Compact"}, 55},
+		{"Low", Options{Quality: "Low"}, 55},
+		{"Unknown", Options{Quality: "Super"}, 80},
 	}
 
 	for _, tt := range tests {

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -11,7 +12,7 @@ type MockConverter struct {
 	name             string
 	supportedSources []string
 	supportedTargets map[string][]string
-	convertFunc      func(src, target string, opts Options) error
+	convertFunc      func(ctx context.Context, src, target string, opts Options) error
 }
 
 func (m *MockConverter) Name() string {
@@ -39,9 +40,9 @@ func (m *MockConverter) SupportedTargetFormats(srcExt string) []string {
 	return m.supportedTargets[srcExt]
 }
 
-func (m *MockConverter) Convert(src, target string, opts Options) error {
+func (m *MockConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	if m.convertFunc != nil {
-		return m.convertFunc(src, target, opts)
+		return m.convertFunc(ctx, src, target, opts)
 	}
 	return nil
 }

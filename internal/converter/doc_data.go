@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -82,7 +83,7 @@ func (c *DocDataConverter) SupportedTargetFormats(srcExt string) []string {
 	return nil
 }
 
-func (c *DocDataConverter) Convert(src, target string, opts Options) error {
+func (c *DocDataConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	_ = opts
 
 	srcExt := normalizeExt(filepath.Ext(src))
@@ -130,14 +131,6 @@ func (c *DocDataConverter) Convert(src, target string, opts Options) error {
 	}
 
 	return fmt.Errorf("unsupported conversion: %s to %s", srcExt, targetExt)
-}
-
-func normalizeExt(ext string) string {
-	ext = strings.ToLower(ext)
-	if ext != "" && !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
-	return ext
 }
 
 func normalizeValue(value interface{}) interface{} {

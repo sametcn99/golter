@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -13,7 +14,7 @@ import (
 	"github.com/yuin/goldmark"
 )
 
-func (c *DocumentConverter) convertMarkdownToHTML(src, target string) error {
+func (c *DocumentConverter) convertMarkdownToHTML(ctx context.Context, src, target string) error {
 	source, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to read markdown file: %w", err)
@@ -66,10 +67,10 @@ func (c *DocumentConverter) convertMarkdownToHTML(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertMarkdownToPDF(src, target string) error {
+func (c *DocumentConverter) convertMarkdownToPDF(ctx context.Context, src, target string) error {
 	// Use pandoc as primary engine (supports full HTML: tables, code blocks, etc.)
 	if _, err := exec.LookPath("pandoc"); err == nil {
-		if err := c.convertWithPandoc(src, target, nil); err == nil {
+		if err := c.convertWithPandoc(ctx, src, target, Options{}); err == nil {
 			return nil
 		}
 		// pandoc failed (e.g. missing pdflatex), fall through to fpdf
@@ -102,7 +103,7 @@ func (c *DocumentConverter) convertMarkdownToPDF(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertMarkdownToEPUB(src, target string) error {
+func (c *DocumentConverter) convertMarkdownToEPUB(ctx context.Context, src, target string) error {
 	// Read and convert markdown to HTML
 	source, err := os.ReadFile(src)
 	if err != nil {
@@ -131,9 +132,9 @@ func (c *DocumentConverter) convertMarkdownToEPUB(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertMarkdownToEbook(src, target string, opts Options) error {
+func (c *DocumentConverter) convertMarkdownToEbook(ctx context.Context, src, target string, opts Options) error {
 	if strings.EqualFold(filepath.Ext(target), ".epub") {
-		return c.convertMarkdownToEPUB(src, target)
+		return c.convertMarkdownToEPUB(ctx, src, target)
 	}
 
 	tempEPUB, cleanup, err := tempPathWithExt("golter_ebook_epub", ".epub")
@@ -142,9 +143,9 @@ func (c *DocumentConverter) convertMarkdownToEbook(src, target string, opts Opti
 	}
 	defer cleanup()
 
-	if err := c.convertMarkdownToEPUB(src, tempEPUB); err != nil {
+	if err := c.convertMarkdownToEPUB(ctx, src, tempEPUB); err != nil {
 		return err
 	}
 
-	return c.convertEbookWithCalibre(tempEPUB, target, opts)
+	return c.convertEbookWithCalibre(ctx, tempEPUB, target, opts)
 }

@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -49,7 +50,7 @@ func TestVideoConverter_Convert_Error(t *testing.T) {
 	c := &VideoConverter{}
 
 	// Test non-existent file
-	err := c.Convert("non_existent.mp4", "out.mkv", Options{})
+	err := c.Convert(context.Background(), "non_existent.mp4", "out.mkv", Options{})
 	if err == nil {
 		t.Error("Convert should fail for non-existent file")
 	}
@@ -104,8 +105,8 @@ func TestVideoConverter_Convert_Integration_Exhaustive(t *testing.T) {
 					targetName := fmt.Sprintf("out_%s_%s%s", srcExt[1:], quality, targetExt)
 					targetPath := filepath.Join(tmpDir, targetName)
 
-					opts := Options{"quality": quality}
-					err := c.Convert(srcPath, targetPath, opts)
+					opts := Options{Quality: quality}
+					err := c.Convert(context.Background(), srcPath, targetPath, opts)
 					if err != nil {
 						t.Errorf("Convert failed: %v", err)
 						return
@@ -156,9 +157,9 @@ func TestParseVideoQuality(t *testing.T) {
 		want videoQuality
 	}{
 		{"Default", Options{}, videoQuality{crf: "23", preset: "medium", audioBr: "192k"}},
-		{"High", Options{"quality": "High"}, videoQuality{crf: "18", preset: "slow", audioBr: "256k"}},
-		{"Balanced", Options{"quality": "Balanced"}, videoQuality{crf: "23", preset: "medium", audioBr: "192k"}},
-		{"Compact", Options{"quality": "Compact"}, videoQuality{crf: "28", preset: "fast", audioBr: "128k"}},
+		{"High", Options{Quality: "High"}, videoQuality{crf: "18", preset: "slow", audioBr: "256k"}},
+		{"Balanced", Options{Quality: "Balanced"}, videoQuality{crf: "23", preset: "medium", audioBr: "192k"}},
+		{"Compact", Options{Quality: "Compact"}, videoQuality{crf: "28", preset: "fast", audioBr: "128k"}},
 	}
 
 	for _, tt := range tests {

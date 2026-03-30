@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,13 +22,13 @@ func TestDocumentConverter_HTML(t *testing.T) {
 
 	t.Run("HTML->MD", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "html_out.md")
-		if err := c.Convert(htmlPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), htmlPath, target, Options{}); err != nil {
 			t.Errorf("Convert(HTML->MD) failed: %v", err)
 		}
 	})
 	t.Run("HTML->EPUB", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "html_out.epub")
-		if err := c.Convert(htmlPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), htmlPath, target, Options{}); err != nil {
 			t.Errorf("Convert(HTML->EPUB) failed: %v", err)
 		}
 	})

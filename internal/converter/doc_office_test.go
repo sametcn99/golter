@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -23,7 +24,7 @@ func TestDocumentConverter_Office(t *testing.T) {
 
 	t.Run("CSV->XLSX", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "test.xlsx")
-		if err := c.Convert(csvPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), csvPath, target, Options{}); err != nil {
 			t.Errorf("Convert(CSV->XLSX) failed: %v", err)
 		}
 	})
@@ -35,7 +36,7 @@ func TestDocumentConverter_Office(t *testing.T) {
 			t.Skip("test.xlsx not found, skipping reverse conversion")
 		}
 		targetCsv := filepath.Join(tmpDir, "back_to.csv")
-		if err := c.Convert(xlsxPath, targetCsv, Options{}); err != nil {
+		if err := c.Convert(context.Background(), xlsxPath, targetCsv, Options{}); err != nil {
 			t.Errorf("Convert(XLSX->CSV) failed: %v", err)
 		}
 	})
@@ -62,7 +63,7 @@ func TestDocumentConverter_Convert_DocxPandoc(t *testing.T) {
 	// MD -> DOCX
 	t.Run("MD->DOCX", func(t *testing.T) {
 		docxPath := filepath.Join(tmpDir, "out.docx")
-		if err := c.Convert(mdPath, docxPath, Options{}); err != nil {
+		if err := c.Convert(context.Background(), mdPath, docxPath, Options{}); err != nil {
 			t.Fatalf("Convert(MD->DOCX) failed: %v", err)
 		}
 		if _, err := os.Stat(docxPath); os.IsNotExist(err) {
@@ -78,7 +79,7 @@ func TestDocumentConverter_Convert_DocxPandoc(t *testing.T) {
 			t.Skip("out.docx not found, skipping reverse conversion")
 		}
 		backToMD := filepath.Join(tmpDir, "back.md")
-		if err := c.Convert(docxPath, backToMD, Options{}); err != nil {
+		if err := c.Convert(context.Background(), docxPath, backToMD, Options{}); err != nil {
 			t.Fatalf("Convert(DOCX->MD) failed: %v", err)
 		}
 		if _, err := os.Stat(backToMD); os.IsNotExist(err) {

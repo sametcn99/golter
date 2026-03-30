@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -39,7 +40,7 @@ func (c *ImageConverter) SupportedTargetFormats(srcExt string) []string {
 	return []string{".jpg", ".png", ".webp"}
 }
 
-func (c *ImageConverter) Convert(src, target string, opts Options) error {
+func (c *ImageConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	// Open source file
 	file, err := os.Open(src)
 	if err != nil {
@@ -99,7 +100,8 @@ func (c *ImageConverter) Convert(src, target string, opts Options) error {
 // parseQuality extracts and normalizes quality from options
 func parseQuality(opts Options) int {
 	quality := 80 // Default
-	if q, ok := opts["quality"].(string); ok {
+	q := opts.Quality
+	if q != "" {
 		switch {
 		case strings.Contains(q, "High"):
 			quality = 92

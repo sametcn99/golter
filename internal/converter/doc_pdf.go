@@ -2,6 +2,7 @@ package converter
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,7 @@ import (
 	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
 )
 
-func (c *DocumentConverter) convertPDFToMarkdown(src, target string) error {
+func (c *DocumentConverter) convertPDFToMarkdown(ctx context.Context, src, target string) error {
 	f, r, err := pdf.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open PDF: %w", err)
@@ -45,7 +46,7 @@ func (c *DocumentConverter) convertPDFToMarkdown(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) compressPDF(src, target string) error {
+func (c *DocumentConverter) compressPDF(ctx context.Context, src, target string) error {
 	conf := model.NewDefaultConfiguration()
 	conf.Cmd = model.OPTIMIZE
 

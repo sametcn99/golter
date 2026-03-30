@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,7 +20,7 @@ func TestDocumentConverter_PDF(t *testing.T) {
 
 	t.Run("PDF->MD", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "pdf_out.md")
-		if err := c.Convert(pdfPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), pdfPath, target, Options{}); err != nil {
 			t.Logf("Convert(PDF->MD) failed: %v", err)
 		} else if _, err := os.Stat(target); os.IsNotExist(err) {
 			t.Error("Target MD not created")
@@ -28,7 +29,7 @@ func TestDocumentConverter_PDF(t *testing.T) {
 
 	t.Run("PDF->PDF (Compress)", func(t *testing.T) {
 		target := filepath.Join(tmpDir, "pdf_compressed.pdf")
-		if err := c.Convert(pdfPath, target, Options{}); err != nil {
+		if err := c.Convert(context.Background(), pdfPath, target, Options{}); err != nil {
 			t.Logf("Convert(PDF->PDF) failed: %v", err)
 		} else if _, err := os.Stat(target); os.IsNotExist(err) {
 			t.Error("Target PDF not created")

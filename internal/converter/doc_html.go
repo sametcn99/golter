@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -11,7 +12,7 @@ import (
 	goepub "github.com/bmaupin/go-epub"
 )
 
-func (c *DocumentConverter) convertHTMLToMarkdown(src, target string) error {
+func (c *DocumentConverter) convertHTMLToMarkdown(ctx context.Context, src, target string) error {
 	f, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("failed to open HTML file: %w", err)
@@ -36,7 +37,7 @@ func (c *DocumentConverter) convertHTMLToMarkdown(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertHTMLToEPUB(src, target string) error {
+func (c *DocumentConverter) convertHTMLToEPUB(ctx context.Context, src, target string) error {
 	source, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to read HTML file: %w", err)
@@ -58,9 +59,9 @@ func (c *DocumentConverter) convertHTMLToEPUB(src, target string) error {
 	return nil
 }
 
-func (c *DocumentConverter) convertHTMLToEbook(src, target string, opts Options) error {
+func (c *DocumentConverter) convertHTMLToEbook(ctx context.Context, src, target string, opts Options) error {
 	if strings.EqualFold(filepath.Ext(target), ".epub") {
-		return c.convertHTMLToEPUB(src, target)
+		return c.convertHTMLToEPUB(ctx, src, target)
 	}
 
 	tempEPUB, cleanup, err := tempPathWithExt("golter_ebook_epub", ".epub")
@@ -69,9 +70,9 @@ func (c *DocumentConverter) convertHTMLToEbook(src, target string, opts Options)
 	}
 	defer cleanup()
 
-	if err := c.convertHTMLToEPUB(src, tempEPUB); err != nil {
+	if err := c.convertHTMLToEPUB(ctx, src, tempEPUB); err != nil {
 		return err
 	}
 
-	return c.convertEbookWithCalibre(tempEPUB, target, opts)
+	return c.convertEbookWithCalibre(ctx, tempEPUB, target, opts)
 }

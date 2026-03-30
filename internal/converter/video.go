@@ -1,6 +1,7 @@
 package converter
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -34,7 +35,7 @@ func (c *VideoConverter) SupportedTargetFormats(srcExt string) []string {
 	return []string{".mp4", ".avi", ".mkv", ".webm", ".gif", ".mov"}
 }
 
-func (c *VideoConverter) Convert(src, target string, opts Options) error {
+func (c *VideoConverter) Convert(ctx context.Context, src, target string, opts Options) error {
 	// Check if ffmpeg is installed
 	_, err := exec.LookPath("ffmpeg")
 	if err != nil {
@@ -48,7 +49,7 @@ func (c *VideoConverter) Convert(src, target string, opts Options) error {
 	args := buildFFmpegArgs(src, target, quality)
 
 	// Execute ffmpeg
-	cmd := exec.Command("ffmpeg", args...)
+	cmd := exec.CommandContext(ctx, "ffmpeg", args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("ffmpeg conversion failed: %w\nOutput: %s", err, string(output))
@@ -72,7 +73,8 @@ func parseVideoQuality(opts Options) videoQuality {
 		audioBr: "192k",   // Default audio bitrate
 	}
 
-	if qualityStr, ok := opts["quality"].(string); ok {
+	qualityStr := opts.Quality
+	if qualityStr != "" {
 		switch {
 		case strings.Contains(qualityStr, "High"):
 			q.crf = "18"
