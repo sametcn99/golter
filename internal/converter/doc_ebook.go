@@ -64,32 +64,41 @@ func (c *DocumentConverter) convertEPUBToMarkdown(src, target string) error {
 	var contentBuilder strings.Builder
 	converter := md.NewConverter("", true, nil)
 
-	// Iterate through spine items
+	var processed, failed int
+
 	for _, item := range book.Spine.Itemrefs {
 		if item.Item == nil {
 			continue
 		}
 
-		// Open the file from the EPUB
 		f, err := item.Item.Open()
 		if err != nil {
+			failed++
 			continue
 		}
 
 		b, err := io.ReadAll(f)
 		f.Close()
 		if err != nil {
+			failed++
 			continue
 		}
 
-		// Convert HTML content to Markdown
 		markdown, err := converter.ConvertString(string(b))
 		if err != nil {
+			failed++
 			continue
 		}
 
-		contentBuilder.WriteString(markdown)
-		contentBuilder.WriteString("\n\n---\n\n")
+		if strings.TrimSpace(markdown) != "" {
+			contentBuilder.WriteString(markdown)
+			contentBuilder.WriteString("\n\n---\n\n")
+			processed++
+		}
+	}
+
+	if processed == 0 {
+		return fmt.Errorf("failed to extract any content from EPUB (%d items failed)", failed)
 	}
 
 	if err := os.WriteFile(target, []byte(contentBuilder.String()), 0644); err != nil {
@@ -113,9 +122,8 @@ func (c *DocumentConverter) convertEPUBToHTML(src, target string) error {
 	book := rc.Rootfiles[0]
 	var contentBuilder strings.Builder
 
-	contentBuilder.WriteString("<!DOCTYPE html><html><body>")
+	contentBuilder.WriteString("<!DOCTYPE html>\n<html>\n<head><meta charset=\"UTF-8\"></head>\n<body>\n")
 
-	// Iterate through spine items
 	for _, item := range book.Spine.Itemrefs {
 		if item.Item == nil {
 			continue
@@ -132,15 +140,13 @@ func (c *DocumentConverter) convertEPUBToHTML(src, target string) error {
 			continue
 		}
 
-		// Simple concatenation of body content would be better, but full HTML concatenation is easier for now
-		// Ideally we should strip <html>, <head>, <body> tags and just take the inner content
-		// For simplicity, we just append the whole thing, browsers handle nested html tags somewhat okay-ish
-		// or better: just append the raw content.
-		contentBuilder.Write(b)
-		contentBuilder.WriteString("<hr>")
+		// Extract only body content to avoid nested <html>/<head>/<body> tags
+		body := extractBodyContent(string(b))
+		contentBuilder.WriteString(body)
+		contentBuilder.WriteString("\n<hr>\n")
 	}
 
-	contentBuilder.WriteString("</body></html>")
+	contentBuilder.WriteString("</body>\n</html>")
 
 	if err := os.WriteFile(target, []byte(contentBuilder.String()), 0644); err != nil {
 		return fmt.Errorf("failed to write HTML file: %w", err)
@@ -149,24 +155,49 @@ func (c *DocumentConverter) convertEPUBToHTML(src, target string) error {
 	return nil
 }
 
+// extractBodyContent extracts the inner content of a <body> tag from an HTML document.
+// If no body tag is found, returns the original content.
+func extractBodyContent(html string) string {
+	lower := strings.ToLower(html)
+
+	bodyStart := strings.Index(lower, "<body")
+	if bodyStart == -1 {
+		return html
+	}
+
+	// Find the closing > of the <body ...> tag
+	bodyTagEnd := strings.Index(lower[bodyStart:], ">")
+	if bodyTagEnd == -1 {
+		return html
+	}
+	contentStart := bodyStart + bodyTagEnd + 1
+
+	bodyEnd := strings.LastIndex(lower, "</body>")
+	if bodyEnd == -1 || bodyEnd <= contentStart {
+		return html[contentStart:]
+	}
+
+	return strings.TrimSpace(html[contentStart:bodyEnd])
+}
+
 func (c *DocumentConverter) convertEPUBToPDF(src, target string) error {
-	// First convert to HTML
+	// Use Calibre ebook-convert as primary (produces best quality)
+	if _, err := exec.LookPath("ebook-convert"); err == nil {
+		return c.convertEbookWithCalibre(src, target, nil)
+	}
+
+	// Fallback: EPUB → HTML → PDF using fpdf (limited tag support)
 	tempHTML := strings.TrimSuffix(target, filepath.Ext(target)) + "_temp.html"
 	if err := c.convertEPUBToHTML(src, tempHTML); err != nil {
 		return err
 	}
 	defer os.Remove(tempHTML)
 
-	// Then convert HTML to PDF (using existing logic logic, but we need to read the temp file)
-	// We can reuse convertMarkdownToPDF logic but starting from HTML
-
-	// Read HTML source
 	source, err := os.ReadFile(tempHTML)
 	if err != nil {
 		return fmt.Errorf("failed to read temp HTML file: %w", err)
 	}
 
-	// Create PDF
 	pdfDoc := fpdf.New("P", "mm", "A4", "")
 	pdfDoc.SetMargins(20, 20, 20)
 	pdfDoc.AddPage()

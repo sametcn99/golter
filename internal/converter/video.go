@@ -149,15 +149,25 @@ func buildFFmpegArgs(src, target string, quality videoQuality) []string {
 
 	case strings.HasSuffix(targetLower, ".avi"):
 		// MPEG-4 for AVI compatibility
+		// mpeg4's -q:v uses 1-31 scale (1=best, 31=worst), not CRF
+		aviQuality := "5" // default balanced
+		switch quality.crf {
+		case "18":
+			aviQuality = "2"
+		case "23":
+			aviQuality = "5"
+		case "28":
+			aviQuality = "8"
+		}
 		args = append(args,
 			"-c:v", "mpeg4",
-			"-q:v", quality.crf,
+			"-q:v", aviQuality,
 			"-c:a", "mp3",
 			"-b:a", quality.audioBr,
 		)
 
 	case strings.HasSuffix(targetLower, ".mov"):
-		// ProRes for MOV (high quality)
+		// H.264 for MOV (broad compatibility)
 		args = append(args,
 			"-c:v", "libx264",
 			"-crf", quality.crf,

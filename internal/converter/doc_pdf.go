@@ -32,7 +32,7 @@ func (c *DocumentConverter) convertPDFToMarkdown(src, target string) error {
 	// Add markdown formatting
 	content := buf.String()
 	if content == "" {
-		return fmt.Errorf("no text content found in PDF (might be image-based)")
+		return fmt.Errorf("no text content found in PDF: the file may be image-based or scanned; OCR is required for such files")
 	}
 
 	// Basic markdown formatting

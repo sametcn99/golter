@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -66,19 +67,25 @@ func (c *DocumentConverter) convertMarkdownToHTML(src, target string) error {
 }
 
 func (c *DocumentConverter) convertMarkdownToPDF(src, target string) error {
-	// Read markdown source
+	// Use pandoc as primary engine (supports full HTML: tables, code blocks, etc.)
+	if _, err := exec.LookPath("pandoc"); err == nil {
+		if err := c.convertWithPandoc(src, target, nil); err == nil {
+			return nil
+		}
+		// pandoc failed (e.g. missing pdflatex), fall through to fpdf
+	}
+
+	// Fallback: goldmark → HTML → fpdf (limited tag support)
 	source, err := os.ReadFile(src)
 	if err != nil {
 		return fmt.Errorf("failed to read markdown file: %w", err)
 	}
 
-	// Convert to HTML first
 	var htmlBuf bytes.Buffer
 	if err := goldmark.Convert(source, &htmlBuf); err != nil {
 		return fmt.Errorf("failed to convert markdown: %w", err)
 	}
 
-	// Create PDF
 	pdfDoc := fpdf.New("P", "mm", "A4", "")
 	pdfDoc.SetMargins(20, 20, 20)
 	pdfDoc.AddPage()
