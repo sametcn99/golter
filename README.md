@@ -1,6 +1,6 @@
 # Golter
 
-![Logo](https://golter.sametcc.me/opengraph-image)
+![Logo](https://golter.vercel.app/opengraph-image)
 
 Terminal-based file converter built with Go. It provides a modern, user-friendly Terminal User Interface (TUI) for batch converting images, videos, audio, and documents between various formats.
 
