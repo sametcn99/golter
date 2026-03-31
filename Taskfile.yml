@@ -7,7 +7,9 @@ vars:
   GO: go
   GOFLAGS: -v -buildvcs=false
   # Dynamic variables are evaluated at runtime
-  LDFLAGS: -s -w
+  VERSION:
+    sh: date +"%Y.%m.%d.%H%M%S"
+  LDFLAGS: -s -w -X 'github.com/sametcn99/golter/internal/version.Current={{.VERSION}}'
 
 tasks:
   default:

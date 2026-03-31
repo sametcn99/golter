@@ -10,9 +10,12 @@ import (
 )
 
 // Current represents the current version of the application
+var (
+        Current = "dev"
+)
+
 const (
-	Current = "0.1.3"
-	Repo    = "sametcn99/golter"
+        Repo = "sametcn99/golter"
 )
 
 type Release struct {
