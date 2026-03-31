@@ -35,12 +35,10 @@ jobs:
             ext: ".exe"
           - os: darwin
             arch: amd64
-            # macos-13 is Intel based
-            runner: macos-13
+            runner: macos-latest
             ext: ""
           - os: darwin
             arch: arm64
-            # macos-latest is Apple Silicon based
             runner: macos-latest
             ext: ""
     runs-on: ${{ matrix.runner }}
