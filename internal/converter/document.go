@@ -2,30 +2,28 @@ package converter
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
+	"slices"
 )
 
 // DocumentConverter handles document format conversions
 type DocumentConverter struct{}
 
-var ebookExtensions = map[string]struct{}{
-	".epub": {},
-	".mobi": {},
-	".azw":  {},
-	".azw3": {},
-	".fb2":  {},
+var ebookExtensions = []string{
+	".epub",
+	".mobi",
+	".azw",
+	".azw3",
+	".fb2",
 }
 
 func isEbookExt(ext string) bool {
-	ext = strings.ToLower(ext)
-	if !strings.HasPrefix(ext, ".") {
-		ext = "." + ext
-	}
-	_, ok := ebookExtensions[ext]
-	return ok
+	ext = normalizeExt(ext)
+	return slices.Contains(ebookExtensions, ext)
 }
 
 func tempPathWithExt(prefix, ext string) (string, func(), error) {
@@ -44,15 +42,8 @@ func (c *DocumentConverter) Name() string {
 }
 
 func (c *DocumentConverter) CanConvert(srcExt, targetExt string) bool {
-	srcExt = strings.ToLower(srcExt)
-	targetExt = strings.ToLower(targetExt)
-
-	if !strings.HasPrefix(srcExt, ".") {
-		srcExt = "." + srcExt
-	}
-	if !strings.HasPrefix(targetExt, ".") {
-		targetExt = "." + targetExt
-	}
+	srcExt = normalizeExt(srcExt)
+	targetExt = normalizeExt(targetExt)
 
 	switch srcExt {
 	case ".pdf":
@@ -81,10 +72,7 @@ func (c *DocumentConverter) SupportedSourceExtensions() []string {
 }
 
 func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
-	srcExt = strings.ToLower(srcExt)
-	if !strings.HasPrefix(srcExt, ".") {
-		srcExt = "." + srcExt
-	}
+	srcExt = normalizeExt(srcExt)
 
 	switch srcExt {
 	case ".pdf":
@@ -116,11 +104,11 @@ func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
 }
 
 func (c *DocumentConverter) Convert(ctx context.Context, src, target string, opts Options) error {
-	srcExt := strings.ToLower(filepath.Ext(src))
-	targetExt := strings.ToLower(filepath.Ext(target))
+	srcExt := normalizeExt(filepath.Ext(src))
+	targetExt := normalizeExt(filepath.Ext(target))
 
 	// Validate source file exists
-	if _, err := os.Stat(src); os.IsNotExist(err) {
+	if _, err := os.Stat(src); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("source file not found: %s", src)
 	}
 

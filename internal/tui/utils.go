@@ -2,17 +2,11 @@ package tui
 
 import (
 	"fmt"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
-
-// statFile is a helper to get file info
-func statFile(path string) (os.FileInfo, error) {
-	return os.Stat(path)
-}
 
 func getFormatIcon(format string) string {
 	switch strings.ToLower(format) {
@@ -86,32 +80,6 @@ func FormatSize(size int64) string {
 // RenderHelpKey renders a keyboard shortcut in a consistent style
 func RenderHelpKey(key, desc string) string {
 	return helpKeyStyle.Render(key) + helpDescStyle.Render(" "+desc)
-}
-
-// RenderProgressBar creates a custom progress bar
-func RenderProgressBar(current, total, width int) string {
-	if total == 0 {
-		return ""
-	}
-
-	percent := float64(current) / float64(total)
-	filled := int(percent * float64(width))
-	empty := width - filled
-
-	bar := ""
-	for i := 0; i < filled; i++ {
-		bar += progressFullStyle.Render(progressBarFull)
-	}
-	if filled < width && filled > 0 {
-		bar += progressFullStyle.Render(progressBarHead)
-		empty--
-	}
-	for i := 0; i < empty; i++ {
-		bar += progressEmptyStyle.Render(progressBarEmpty)
-	}
-
-	percentStr := fmt.Sprintf(" %3.0f%%", percent*100)
-	return bar + mutedStyle.Render(percentStr)
 }
 
 // GetFileTypeColor returns the appropriate color for a file type

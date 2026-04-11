@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"time"
@@ -38,6 +39,7 @@ type Model struct {
 	latestVersion   string
 	updateUrl       string
 	updateAvailable bool
+	cancelCtx       context.CancelFunc
 }
 
 // NewModel creates a new Model with initial configuration
@@ -61,7 +63,7 @@ func NewModel(initialPath string) Model {
 	}
 
 	// Ensure initialPath is a directory
-	info, err := statFile(initialPath)
+	info, err := os.Stat(initialPath)
 	if err == nil && !info.IsDir() {
 		initialPath = filepath.Dir(initialPath)
 	}

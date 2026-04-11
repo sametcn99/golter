@@ -59,7 +59,7 @@ func (m Model) View() string {
 	return s.String()
 }
 
-func (m *Model) renderSelectingState(s *strings.Builder) {
+func (m Model) renderSelectingState(s *strings.Builder) {
 	s.WriteString(stateTitleStyle.Render("Select files to convert") + "\n")
 	s.WriteString(m.selector.View())
 	s.WriteString("\n")
@@ -72,19 +72,7 @@ func (m *Model) renderSelectingState(s *strings.Builder) {
 	}
 }
 
-func (m *Model) renderActionState(s *strings.Builder) {
-	// Get file type info
-	ext := filepath.Ext(m.selectedFiles[0])
-	supportedTargets := m.manager.GetSupportedTargetFormats(ext)
-
-	// Rebuild action options dynamically
-	availableActions := []string{}
-	if len(supportedTargets) > 0 {
-		availableActions = append(availableActions, iconConvert+"  Convert Format")
-	}
-	availableActions = append(availableActions, iconCompress+"  Compress Files")
-	m.actionOptions = availableActions
-
+func (m Model) renderActionState(s *strings.Builder) {
 	if len(m.actionOptions) == 0 {
 		s.WriteString(errorStyle.Render("  No actions available for this file type") + "\n")
 		return
@@ -105,7 +93,7 @@ func (m *Model) renderActionState(s *strings.Builder) {
 	}
 }
 
-func (m *Model) renderFormatState(s *strings.Builder) {
+func (m Model) renderFormatState(s *strings.Builder) {
 	fileCount := len(m.selectedFiles)
 	srcExt := filepath.Ext(m.selectedFiles[0])
 
@@ -124,7 +112,7 @@ func (m *Model) renderFormatState(s *strings.Builder) {
 	}
 }
 
-func (m *Model) renderQualityState(s *strings.Builder) {
+func (m Model) renderQualityState(s *strings.Builder) {
 	s.WriteString(stateTitleStyle.Render("Select compression quality") + "\n")
 	s.WriteString(mutedStyle.Render(fmt.Sprintf("  Compressing %d file(s)", len(m.selectedFiles))) + "\n\n")
 
@@ -137,7 +125,7 @@ func (m *Model) renderQualityState(s *strings.Builder) {
 	}
 }
 
-func (m *Model) renderConvertingState(s *strings.Builder) {
+func (m Model) renderConvertingState(s *strings.Builder) {
 	s.WriteString(stateTitleStyle.Render("Converting files...") + "\n\n")
 
 	// Spinner and status
@@ -163,7 +151,7 @@ func (m *Model) renderConvertingState(s *strings.Builder) {
 	s.WriteString("\n" + mutedStyle.Render("  Press Ctrl+C to cancel") + "\n")
 }
 
-func (m *Model) renderDoneState(s *strings.Builder) {
+func (m Model) renderDoneState(s *strings.Builder) {
 	if m.err != nil {
 		// Error box
 		errorBox := errorBoxStyle.Render(
@@ -181,7 +169,7 @@ func (m *Model) renderDoneState(s *strings.Builder) {
 	}
 }
 
-func (m *Model) renderQuittingState(s *strings.Builder) {
+func (m Model) renderQuittingState(s *strings.Builder) {
 	confirmBox := confirmStyle.Render(
 		infoStyle.Render(iconWarning+" Quit Confirmation") + "\n\n" +
 			"Are you sure you want to quit?\n\n" +

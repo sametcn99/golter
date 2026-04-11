@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strings"
 )
 
@@ -16,8 +17,8 @@ func (c *AudioConverter) Name() string {
 }
 
 func (c *AudioConverter) isSupported(ext string) bool {
-	ext = strings.ToLower(ext)
-	return ext == ".mp3" || ext == ".wav" || ext == ".ogg" || ext == ".flac" || ext == ".m4a" || ext == ".aac"
+	ext = normalizeExt(ext)
+	return slices.Contains(c.SupportedSourceExtensions(), ext)
 }
 
 func (c *AudioConverter) CanConvert(srcExt, targetExt string) bool {
@@ -39,7 +40,7 @@ func (c *AudioConverter) Convert(ctx context.Context, src, target string, opts O
 	// Check if ffmpeg is installed
 	_, err := exec.LookPath("ffmpeg")
 	if err != nil {
-		return fmt.Errorf("ffmpeg not found: please install ffmpeg to convert audio (https://ffmpeg.org)")
+		return fmt.Errorf("ffmpeg not found: please install ffmpeg to convert audio (https://ffmpeg.org): %w", err)
 	}
 
 	// Parse quality setting

@@ -96,18 +96,19 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 			}
 			return *s, nil
 		case "d":
-			// Deselect all files
+			// Deselect all files globally
+			s.selected = make(map[string]bool)
+			s.selectedFileType = FileTypeUnknown
+			
 			items := s.list.Items()
 			for idx, listItem := range items {
 				if i, ok := listItem.(item); ok && !i.isDir && i.info != nil {
-					if s.selected[i.path] {
-						delete(s.selected, i.path)
+					if i.selected {
 						i.selected = false
 						s.list.SetItem(idx, i)
 					}
 				}
 			}
-			s.selectedFileType = FileTypeUnknown
 			return *s, nil
 		case "h", "left":
 			// Go to parent directory

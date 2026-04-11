@@ -93,6 +93,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			if msg.String() == "ctrl+c" {
 				m.quitting = true
+				if m.cancelCtx != nil {
+					m.cancelCtx()
+				}
 				return m, tea.Quit
 			}
 		}
@@ -187,6 +190,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedFiles = files
 				m.state = StateSelectingAction
 				m.cursor = 0
+
+				// Prepare action options
+				ext := filepath.Ext(files[0])
+				supportedTargets := m.manager.GetSupportedTargetFormats(ext)
+				var availableActions []string
+				if len(supportedTargets) > 0 {
+					availableActions = append(availableActions, iconConvert+"  Convert Format")
+				}
+				availableActions = append(availableActions, iconCompress+"  Compress Files")
+				m.actionOptions = availableActions
+
 				return m, nil
 			}
 		}
@@ -246,9 +260,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.progressTotal = len(m.selectedFiles)
 				m.startTime = time.Now()
 				m.currentStatus = "Starting conversion..."
+
+				ctx, cancel := context.WithCancel(context.Background())
+				m.cancelCtx = cancel
+
 				return m, tea.Batch(
 					m.spinner.Tick,
-					convertFilesWithProgress(m.selectedFiles, m.targetFormat, "High", m.manager),
+					convertFilesWithProgress(ctx, m.selectedFiles, m.targetFormat, "High", m.manager),
 				)
 			}
 		}
@@ -271,9 +289,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.progressTotal = len(m.selectedFiles)
 				m.startTime = time.Now()
 				m.currentStatus = "Starting compression..."
+
+				ctx, cancel := context.WithCancel(context.Background())
+				m.cancelCtx = cancel
+
 				return m, tea.Batch(
 					m.spinner.Tick,
-					convertFilesWithProgress(m.selectedFiles, m.targetFormat, quality, m.manager),
+					convertFilesWithProgress(ctx, m.selectedFiles, m.targetFormat, quality, m.manager),
 				)
 			}
 		}
@@ -287,7 +309,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func convertFilesWithProgress(files []string, targetExt string, quality string, mgr *converter.Manager) tea.Cmd {
+func convertFilesWithProgress(ctx context.Context, files []string, targetExt string, quality string, mgr *converter.Manager) tea.Cmd {
 	return func() tea.Msg {
 		startTime := time.Now()
 		var results []conversionResult
@@ -312,7 +334,20 @@ func convertFilesWithProgress(files []string, targetExt string, quality string, 
 			wg.Add(1)
 			go func(path string) {
 				defer wg.Done()
-				semaphore <- struct{}{}
+
+				select {
+				case <-ctx.Done():
+					mu.Lock()
+					results = append(results, conversionResult{
+						path:     path,
+						err:      fmt.Errorf("cancelled: %w", ctx.Err()),
+						duration: 0,
+					})
+					atomic.AddInt32(&completed, 1)
+					mu.Unlock()
+					return
+				case semaphore <- struct{}{}:
+				}
 				defer func() { <-semaphore }()
 
 				fileStart := time.Now()
@@ -348,7 +383,7 @@ func convertFilesWithProgress(files []string, targetExt string, quality string, 
 					}
 				}
 
-				err = conv.Convert(context.Background(), path, outputPath, opts)
+				err = conv.Convert(ctx, path, outputPath, opts)
 				duration := time.Since(fileStart)
 
 				mu.Lock()

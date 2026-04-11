@@ -7,7 +7,7 @@ import (
 	"image/jpeg"
 	"image/png"
 	"os"
-	"runtime"
+	"slices"
 	"strings"
 
 	"github.com/chai2010/webp"
@@ -21,8 +21,8 @@ func (c *ImageConverter) Name() string {
 }
 
 func (c *ImageConverter) isSupported(ext string) bool {
-	ext = strings.ToLower(ext)
-	return ext == ".jpg" || ext == ".jpeg" || ext == ".png" || ext == ".webp"
+	ext = normalizeExt(ext)
+	return slices.Contains(c.SupportedSourceExtensions(), ext)
 }
 
 func (c *ImageConverter) CanConvert(srcExt, targetExt string) bool {
@@ -41,6 +41,21 @@ func (c *ImageConverter) SupportedTargetFormats(srcExt string) []string {
 }
 
 func (c *ImageConverter) Convert(ctx context.Context, src, target string, opts Options) error {
+	errCh := make(chan error, 1)
+
+	go func() {
+		errCh <- c.doConvert(src, target, opts)
+	}()
+
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("image conversion cancelled: %w", ctx.Err())
+	case err := <-errCh:
+		return err
+	}
+}
+
+func (c *ImageConverter) doConvert(src, target string, opts Options) error {
 	// Open source file
 	file, err := os.Open(src)
 	if err != nil {
@@ -127,10 +142,8 @@ func getPNGCompressionLevel(quality int) png.CompressionLevel {
 }
 
 func init() {
-	// Optimize for multi-core processing
-	runtime.GOMAXPROCS(runtime.NumCPU())
-
-	// Register image decoders
+	// Register image decoders to prevent unused import errors if they were imported just for registration
+	// Though typically `import _ "image/jpeg"` is used, this makes it explicit here.
 	_ = jpeg.Decode
 	_ = png.Decode
 	_ = webp.Decode

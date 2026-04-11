@@ -2,11 +2,12 @@ package converter
 
 import (
 	"fmt"
-	"strings"
+	"sync"
 )
 
 // Manager handles the registration and retrieval of converters.
 type Manager struct {
+	mu         sync.RWMutex
 	converters []Converter
 }
 
@@ -19,21 +20,18 @@ func NewManager() *Manager {
 
 // Register adds a converter to the manager.
 func (m *Manager) Register(c Converter) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.converters = append(m.converters, c)
 }
 
 // FindConverter returns a converter that can handle the specified extensions.
 func (m *Manager) FindConverter(srcExt, targetExt string) (Converter, error) {
-	srcExt = strings.ToLower(srcExt)
-	targetExt = strings.ToLower(targetExt)
+	srcExt = normalizeExt(srcExt)
+	targetExt = normalizeExt(targetExt)
 
-	// Ensure extensions start with dot
-	if !strings.HasPrefix(srcExt, ".") {
-		srcExt = "." + srcExt
-	}
-	if !strings.HasPrefix(targetExt, ".") {
-		targetExt = "." + targetExt
-	}
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	for _, c := range m.converters {
 		if c.CanConvert(srcExt, targetExt) {
@@ -46,10 +44,10 @@ func (m *Manager) FindConverter(srcExt, targetExt string) (Converter, error) {
 // GetSupportedTargetFormats returns a list of supported target extensions for a given source extension.
 func (m *Manager) GetSupportedTargetFormats(srcExt string) []string {
 	targets := make(map[string]bool)
-	srcExt = strings.ToLower(srcExt)
-	if !strings.HasPrefix(srcExt, ".") {
-		srcExt = "." + srcExt
-	}
+	srcExt = normalizeExt(srcExt)
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	for _, c := range m.converters {
 		for _, t := range c.SupportedTargetFormats(srcExt) {
@@ -66,6 +64,9 @@ func (m *Manager) GetSupportedTargetFormats(srcExt string) []string {
 
 // SupportedExtensions returns a list of supported source extensions.
 func (m *Manager) SupportedExtensions() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
 	exts := make(map[string]bool)
 	for _, c := range m.converters {
 		for _, ext := range c.SupportedSourceExtensions() {
