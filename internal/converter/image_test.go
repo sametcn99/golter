@@ -19,12 +19,12 @@ func createTestImage(t *testing.T, path string) {
 	height := 10
 	upLeft := image.Point{0, 0}
 	lowRight := image.Point{width, height}
-	img := image.NewRGBA(image.Rectangle{upLeft, lowRight})
+	img := image.NewNRGBA(image.Rectangle{upLeft, lowRight})
 
 	// Set color for each pixel
 	for x := 0; x < width; x++ {
 		for y := 0; y < height; y++ {
-			img.Set(x, y, color.White)
+			img.SetNRGBA(x, y, color.NRGBA{R: uint8(20 * x), G: uint8(20 * y), B: 50, A: uint8(100 + 12*x)})
 		}
 	}
 
@@ -61,7 +61,7 @@ func TestImageConverter_Convert_Integration_Exhaustive(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	c := &ImageConverter{}
-	formats := []string{".jpg", ".png", ".webp"}
+	formats := []string{".jpg", ".jpeg", ".png", ".webp"}
 	qualities := []string{"High", "Balanced", "Low"}
 
 	for _, srcExt := range formats {
@@ -83,9 +83,21 @@ func TestImageConverter_Convert_Integration_Exhaustive(t *testing.T) {
 						return
 					}
 
-					if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-						t.Errorf("Target file not created: %s", targetPath)
+					decoded := decodeImage(t, targetPath)
+					if decoded.Bounds() != image.Rect(0, 0, 10, 10) {
+						t.Fatal(decoded.Bounds())
 					}
+					if srcExt == ".png" && (targetExt == ".png" || (targetExt == ".webp" && quality == "High")) {
+						original := decodeImage(t, srcPath)
+						for y := 0; y < 10; y++ {
+							for x := 0; x < 10; x++ {
+								if color.NRGBAModel.Convert(original.At(x, y)) != color.NRGBAModel.Convert(decoded.At(x, y)) {
+									t.Fatalf("pixel (%d,%d) changed: %v -> %v", x, y, original.At(x, y), decoded.At(x, y))
+								}
+							}
+						}
+					}
+
 				})
 			}
 		}

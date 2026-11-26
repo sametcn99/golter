@@ -5,13 +5,17 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+
+	"github.com/pelletier/go-toml/v2"
+	"gopkg.in/yaml.v3"
 )
 
 func TestDocDataConverter_SupportedExtensions(t *testing.T) {
 	c := &DocDataConverter{}
 
-	expectedSrc := []string{".json", ".yaml", ".yml", ".xml", ".toml", ".csv", ".xlsx", ".xls"}
+	expectedSrc := []string{".json", ".yaml", ".yml", ".xml", ".toml", ".csv", ".xlsx"}
 	srcExts := c.SupportedSourceExtensions()
 	if len(srcExts) == 0 {
 		t.Error("SupportedSourceExtensions returned empty list")
@@ -112,9 +116,12 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 		if err != nil {
 			t.Fatalf("failed to read json output: %v", err)
 		}
-		var payload interface{}
+		var payload []map[string]string
 		if err := json.Unmarshal(data, &payload); err != nil {
 			t.Fatalf("invalid json output: %v", err)
+		}
+		if !reflect.DeepEqual(payload, []map[string]string{{"name": "Ada", "age": "42"}, {"name": "Bob", "age": "35"}}) {
+			t.Fatalf("unexpected rows: %v", payload)
 		}
 	})
 
@@ -148,6 +155,17 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 		if err := c.Convert(context.Background(), yamlPath, tomlPath, Options{}); err != nil {
 			t.Fatalf("Convert(YAML->TOML) failed: %v", err)
 		}
+		b, err := os.ReadFile(tomlPath)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var row struct {
+			Name string
+			Age  int
+		}
+		if err := toml.Unmarshal(b, &row); err != nil || row.Name != "Ada" || row.Age != 42 {
+			t.Fatalf("TOML: %q (%v)", b, err)
+		}
 	})
 
 	t.Run("TOML->YAML", func(t *testing.T) {
@@ -162,8 +180,34 @@ func TestDocDataConverter_Conversions(t *testing.T) {
 			t.Fatalf("Convert(TOML->YAML) failed: %v", err)
 		}
 
-		if _, err := os.Stat(yamlFromToml); err != nil {
-			t.Fatalf("expected output file not found: %v", err)
+		b, err := os.ReadFile(yamlFromToml)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var row struct {
+			Name string
+			Age  int
+		}
+		if err := yaml.Unmarshal(b, &row); err != nil || row.Name != "Ada" || row.Age != 42 {
+			t.Fatalf("YAML: %q (%v)", b, err)
 		}
 	})
+}
+
+func TestXMLKeepsAllRecords(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "data.json")
+	dst := filepath.Join(dir, "data.xml")
+	back := filepath.Join(dir, "back.json")
+	put(t, src, `[{"id":9007199254740993,"name":"Ada"},{"id":2,"name":"Bob"}]`)
+	c := &DocDataConverter{}
+	if err := c.Convert(t.Context(), src, dst, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Convert(t.Context(), dst, back, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"9007199254740993", "Ada", "Bob"} {
+		assertText(t, back, value)
+	}
 }

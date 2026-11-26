@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 
@@ -24,51 +25,19 @@ func (c *DocDataConverter) Name() string {
 	return "Doc Data Converter"
 }
 
-func (c *DocDataConverter) isSupported(ext string) bool {
-	ext = strings.ToLower(ext)
-	switch ext {
-	case ".json", ".yaml", ".yml", ".xml", ".toml", ".csv", ".xlsx", ".xls":
-		return true
-	default:
-		return false
-	}
-}
-
 func (c *DocDataConverter) CanConvert(srcExt, targetExt string) bool {
-	srcExt = normalizeExt(srcExt)
-	targetExt = normalizeExt(targetExt)
-
-	if !c.isSupported(srcExt) || !c.isSupported(targetExt) {
-		return false
-	}
-
-	switch srcExt {
-	case ".json":
-		return targetExt == ".yaml" || targetExt == ".yml" || targetExt == ".xml" || targetExt == ".csv" || targetExt == ".xlsx" || targetExt == ".xls"
-	case ".yaml", ".yml":
-		return targetExt == ".json" || targetExt == ".toml"
-	case ".toml":
-		return targetExt == ".yaml" || targetExt == ".yml"
-	case ".xml":
-		return targetExt == ".json"
-	case ".csv":
-		return targetExt == ".json"
-	case ".xlsx", ".xls":
-		return targetExt == ".json"
-	}
-
-	return false
+	return slices.Contains(c.SupportedTargetFormats(srcExt), normalizeExt(targetExt))
 }
 
 func (c *DocDataConverter) SupportedSourceExtensions() []string {
-	return []string{".json", ".yaml", ".yml", ".xml", ".toml", ".csv", ".xlsx", ".xls"}
+	return []string{".json", ".yaml", ".yml", ".xml", ".toml", ".csv", ".xlsx"}
 }
 
 func (c *DocDataConverter) SupportedTargetFormats(srcExt string) []string {
 	srcExt = normalizeExt(srcExt)
 	switch srcExt {
 	case ".json":
-		return []string{".yaml", ".yml", ".xml", ".csv", ".xlsx", ".xls"}
+		return []string{".yaml", ".yml", ".xml", ".csv", ".xlsx"}
 	case ".yaml", ".yml":
 		return []string{".json", ".toml"}
 	case ".toml":
@@ -77,7 +46,7 @@ func (c *DocDataConverter) SupportedTargetFormats(srcExt string) []string {
 		return []string{".json"}
 	case ".csv":
 		return []string{".json"}
-	case ".xlsx", ".xls":
+	case ".xlsx":
 		return []string{".json"}
 	}
 	return nil
@@ -102,7 +71,7 @@ func (c *DocDataConverter) Convert(ctx context.Context, src, target string, opts
 			return c.convertJSONToXML(src, target)
 		case ".csv":
 			return c.convertJSONToCSV(src, target)
-		case ".xlsx", ".xls":
+		case ".xlsx":
 			return c.convertJSONToExcel(src, target)
 		}
 	case ".yaml", ".yml":
@@ -124,13 +93,43 @@ func (c *DocDataConverter) Convert(ctx context.Context, src, target string, opts
 		if targetExt == ".json" {
 			return c.convertCSVToJSON(src, target)
 		}
-	case ".xlsx", ".xls":
+	case ".xlsx":
 		if targetExt == ".json" {
 			return c.convertExcelToJSON(src, target)
 		}
 	}
 
 	return fmt.Errorf("unsupported conversion: %s to %s", srcExt, targetExt)
+}
+
+// UseNumber keeps identifiers and decimals intact until the target encoder handles them.
+func decodeJSON(data []byte, payload *any) error {
+	if !json.Valid(data) {
+		return fmt.Errorf("invalid JSON document")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.UseNumber()
+	return decoder.Decode(payload)
+}
+
+func yamlNumbers(value any) any {
+	switch v := value.(type) {
+	case json.Number:
+		tag := "!!int"
+		if strings.ContainsAny(string(v), ".eE") {
+			tag = "!!float"
+		}
+		return &yaml.Node{Kind: yaml.ScalarNode, Tag: tag, Value: string(v)}
+	case []any:
+		for i, child := range v {
+			v[i] = yamlNumbers(child)
+		}
+	case map[string]any:
+		for key, child := range v {
+			v[key] = yamlNumbers(child)
+		}
+	}
+	return value
 }
 
 func normalizeValue(value interface{}) interface{} {
@@ -165,12 +164,11 @@ func (c *DocDataConverter) convertJSONToYAML(src, target string) error {
 	}
 
 	var payload interface{}
-	if err := json.Unmarshal(data, &payload); err != nil {
+	if err := decodeJSON(data, &payload); err != nil {
 		return fmt.Errorf("failed to parse json: %w", err)
 	}
 
-	payload = normalizeValue(payload)
-	out, err := yaml.Marshal(payload)
+	out, err := yaml.Marshal(yamlNumbers(payload))
 	if err != nil {
 		return fmt.Errorf("failed to marshal yaml: %w", err)
 	}
@@ -261,7 +259,7 @@ func (c *DocDataConverter) convertJSONToXML(src, target string) error {
 	}
 
 	var payload interface{}
-	if err := json.Unmarshal(data, &payload); err != nil {
+	if err := decodeJSON(data, &payload); err != nil {
 		return fmt.Errorf("failed to parse json: %w", err)
 	}
 
@@ -319,28 +317,10 @@ func (c *DocDataConverter) convertJSONToCSV(src, target string) error {
 		return err
 	}
 
-	file, err := os.Create(target)
-	if err != nil {
-		return fmt.Errorf("failed to create csv file: %w", err)
-	}
-	defer file.Close()
-
-	writer := csv.NewWriter(file)
-	defer writer.Flush()
-
 	if len(headers) > 0 {
-		if err := writer.Write(headers); err != nil {
-			return fmt.Errorf("failed to write csv header: %w", err)
-		}
+		rows = append([][]string{headers}, rows...)
 	}
-
-	for _, row := range rows {
-		if err := writer.Write(row); err != nil {
-			return fmt.Errorf("failed to write csv row: %w", err)
-		}
-	}
-
-	return nil
+	return writeCSVFile(target, rows)
 }
 
 func (c *DocDataConverter) convertCSVToJSON(src, target string) error {
@@ -362,7 +342,10 @@ func (c *DocDataConverter) convertCSVToJSON(src, target string) error {
 		return fmt.Errorf("csv file is empty")
 	}
 
-	headers := normalizeHeaders(records[0])
+	headers, err := normalizeHeaders(records[0])
+	if err != nil {
+		return err
+	}
 	data := make([]map[string]string, 0, len(records)-1)
 	for _, row := range records[1:] {
 		entry := make(map[string]string, len(headers))
@@ -461,7 +444,10 @@ func (c *DocDataConverter) convertExcelToJSON(src, target string) error {
 		return fmt.Errorf("excel sheet is empty")
 	}
 
-	headers := normalizeHeaders(rows[0])
+	headers, err := normalizeHeaders(rows[0])
+	if err != nil {
+		return err
+	}
 	data := make([]map[string]string, 0, len(rows)-1)
 	for _, row := range rows[1:] {
 		entry := make(map[string]string, len(headers))
@@ -489,7 +475,7 @@ func (c *DocDataConverter) convertExcelToJSON(src, target string) error {
 
 func jsonToRows(data []byte) ([]string, [][]string, error) {
 	var payload interface{}
-	if err := json.Unmarshal(data, &payload); err != nil {
+	if err := decodeJSON(data, &payload); err != nil {
 		return nil, nil, fmt.Errorf("failed to parse json: %w", err)
 	}
 
@@ -554,7 +540,8 @@ func rowsFromMap(item map[string]interface{}) ([]string, [][]string, error) {
 	return headers, [][]string{record}, nil
 }
 
-func normalizeHeaders(headers []string) []string {
+func normalizeHeaders(headers []string) ([]string, error) {
+	seen := make(map[string]bool, len(headers))
 	normalized := make([]string, len(headers))
 	for i, header := range headers {
 		if strings.TrimSpace(header) == "" {
@@ -562,8 +549,12 @@ func normalizeHeaders(headers []string) []string {
 		} else {
 			normalized[i] = header
 		}
+		if seen[normalized[i]] {
+			return nil, fmt.Errorf("duplicate column name %q at column %d", normalized[i], i+1)
+		}
+		seen[normalized[i]] = true
 	}
-	return normalized
+	return normalized, nil
 }
 
 func formatValue(value interface{}) string {

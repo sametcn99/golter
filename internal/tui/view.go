@@ -66,7 +66,7 @@ func (m Model) renderSelectingState(s *strings.Builder) {
 
 	// Selected files info
 	selectedCount := len(m.selector.SelectedFiles())
-	if selectedCount < 0 {
+	if selectedCount == 0 {
 		s.WriteString(mutedStyle.Render("  (Files of the same type only can be selected together)") + "\n")
 		s.WriteString(mutedStyle.Render("  Select files using Space, then press 'c' to continue") + "\n")
 	}
@@ -74,7 +74,7 @@ func (m Model) renderSelectingState(s *strings.Builder) {
 
 func (m Model) renderActionState(s *strings.Builder) {
 	if len(m.actionOptions) == 0 {
-		s.WriteString(errorStyle.Render("  No actions available for this file type") + "\n")
+		s.WriteString(errorStyle.Render("  Selected files have no common conversion or compression option. Press Esc to change the selection.") + "\n")
 		return
 	}
 
@@ -95,9 +95,8 @@ func (m Model) renderActionState(s *strings.Builder) {
 
 func (m Model) renderFormatState(s *strings.Builder) {
 	fileCount := len(m.selectedFiles)
-	srcExt := filepath.Ext(m.selectedFiles[0])
 
-	s.WriteString(stateTitleStyle.Render(fmt.Sprintf("Select target format (from %s)", srcExt)) + "\n")
+	s.WriteString(stateTitleStyle.Render("Select target format") + "\n")
 	s.WriteString(mutedStyle.Render(fmt.Sprintf("  Converting %d file(s)", fileCount)) + "\n\n")
 
 	for i, format := range m.targetFormats {
@@ -140,7 +139,7 @@ func (m Model) renderConvertingState(s *strings.Builder) {
 
 	// Current file being processed
 	if m.currentFile != "" {
-		s.WriteString(currentFileStyle.Render(fmt.Sprintf("  Processing: %s", filepath.Base(m.currentFile))) + "\n")
+		s.WriteString(currentFileStyle.Render(fmt.Sprintf("  Last finished: %s", filepath.Base(m.currentFile))) + "\n")
 	}
 
 	// Elapsed time

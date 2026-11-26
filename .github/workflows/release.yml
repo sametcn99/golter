@@ -1,13 +1,14 @@
-name: Automatic Release
+name: Test and release
 
 on:
+  pull_request:
   push:
     branches:
       - main
       - master
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   setup:
@@ -23,6 +24,7 @@ jobs:
   build:
     needs: setup
     strategy:
+      fail-fast: false
       matrix:
         include:
           - os: linux
@@ -35,7 +37,7 @@ jobs:
             ext: ".exe"
           - os: darwin
             arch: amd64
-            runner: macos-latest
+            runner: macos-15-intel
             ext: ""
           - os: darwin
             arch: arm64
@@ -51,6 +53,44 @@ jobs:
         with:
           go-version: '1.24.4'
 
+      - name: Set up Python for terminal acceptance
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install integration tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg pandoc calibre poppler-utils
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Full integration and race tests
+        if: runner.os == 'Linux'
+        env:
+          GOLTER_REQUIRE_TOOLS: '1'
+          QT_QPA_PLATFORM: offscreen
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -race -json -count=1 -coverprofile=coverage.out ./... | tee test-results.jsonl
+          python tests/coverage_summary.py test-results.jsonl coverage.out >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Linux test evidence
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-test-evidence
+          path: |
+            coverage.out
+            test-results.jsonl
+
+      - name: Native tests
+        if: runner.os != 'Linux'
+        run: go test -count=1 ./...
+
       - name: Build Application
         shell: bash
         run: |
@@ -60,6 +100,12 @@ jobs:
           export CGO_ENABLED=1
           GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags="$LDFLAGS" -o bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} .
 
+      - name: Exercise the built executable in a terminal
+        shell: bash
+        run: |
+          python -m pip install 'ptyprocess==0.7.0; sys_platform != "win32"' 'pywinpty>=2,<4; sys_platform == "win32"'
+          python tests/terminal_smoke.py bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -67,18 +113,24 @@ jobs:
           path: bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
 
   release:
+    if: github.event_name == 'push'
+    permissions:
+      contents: write
     needs: [setup, build]
     runs-on: ubuntu-latest
     steps:
       - name: Download Artifacts
         uses: actions/download-artifact@v4
         with:
+          pattern: golter-*
           path: artifacts
           merge-multiple: true
 
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
+          target_commitish: ${{ github.sha }}
+          fail_on_unmatched_files: true
           tag_name: v${{ needs.setup.outputs.version }}
           name: Release v${{ needs.setup.outputs.version }}
           files: artifacts/*

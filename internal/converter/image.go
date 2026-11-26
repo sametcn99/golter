@@ -1,14 +1,19 @@
 package converter
 
 import (
+	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"image"
+	"image/draw"
 	"image/jpeg"
 	"image/png"
 	"os"
 	"slices"
 	"strings"
+
+	webpdecode "golang.org/x/image/webp"
 
 	"github.com/chai2010/webp"
 )
@@ -41,21 +46,10 @@ func (c *ImageConverter) SupportedTargetFormats(srcExt string) []string {
 }
 
 func (c *ImageConverter) Convert(ctx context.Context, src, target string, opts Options) error {
-	errCh := make(chan error, 1)
-
-	go func() {
-		errCh <- c.doConvert(src, target, opts)
-	}()
-
-	select {
-	case <-ctx.Done():
-		return fmt.Errorf("image conversion cancelled: %w", ctx.Err())
-	case err := <-errCh:
-		return err
-	}
+	return stagedOutput(ctx, target, func(temp string) error { return c.encode(ctx, src, temp, opts) }, os.Rename)
 }
 
-func (c *ImageConverter) doConvert(src, target string, opts Options) error {
+func (c *ImageConverter) encode(ctx context.Context, src, target string, opts Options) (err error) {
 	// Open source file
 	file, err := os.Open(src)
 	if err != nil {
@@ -64,9 +58,22 @@ func (c *ImageConverter) doConvert(src, target string, opts Options) error {
 	defer file.Close()
 
 	// Decode image
-	img, format, err := image.Decode(file)
+	var img image.Image
+	var format string
+	input := bufio.NewReader(file)
+	header, _ := input.Peek(12)
+	if len(header) == 12 && string(header[:4]) == "RIFF" && string(header[8:]) == "WEBP" {
+		format = "webp"
+		img, err = webpdecode.Decode(input)
+	} else {
+		img, format, err = image.Decode(input)
+	}
 	if err != nil {
 		return fmt.Errorf("failed to decode image (format: %s): %w", format, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return err
 	}
 
 	// Parse quality option
@@ -77,7 +84,7 @@ func (c *ImageConverter) doConvert(src, target string, opts Options) error {
 	if err != nil {
 		return fmt.Errorf("failed to create output file: %w", err)
 	}
-	defer outFile.Close()
+	defer func() { err = errors.Join(err, outFile.Close()) }()
 
 	// Encode to target format with optimized settings
 	targetLower := strings.ToLower(target)
@@ -98,10 +105,17 @@ func (c *ImageConverter) doConvert(src, target string, opts Options) error {
 		return nil
 
 	case strings.HasSuffix(targetLower, ".webp"):
-		// WebP is excellent for compression
-		if err := webp.Encode(outFile, img, &webp.Options{
+		// libwebp takes straight RGBA bytes through its image.RGBA API.
+		straight, ok := img.(*image.NRGBA)
+		if !ok {
+			straight = image.NewNRGBA(img.Bounds())
+			draw.Draw(straight, straight.Bounds(), img, img.Bounds().Min, draw.Src)
+		}
+		pixels := &image.RGBA{Pix: straight.Pix, Stride: straight.Stride, Rect: straight.Rect}
+		if err := webp.Encode(outFile, pixels, &webp.Options{
 			Quality:  float32(quality),
-			Lossless: quality >= 95,
+			Lossless: quality >= 92,
+			Exact:    quality >= 92,
 		}); err != nil {
 			return fmt.Errorf("failed to encode WebP: %w", err)
 		}
@@ -139,12 +153,4 @@ func getPNGCompressionLevel(quality int) png.CompressionLevel {
 	default:
 		return png.BestCompression
 	}
-}
-
-func init() {
-	// Register image decoders to prevent unused import errors if they were imported just for registration
-	// Though typically `import _ "image/jpeg"` is used, this makes it explicit here.
-	_ = jpeg.Decode
-	_ = png.Decode
-	_ = webp.Decode
 }

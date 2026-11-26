@@ -12,6 +12,10 @@ import (
 	goepub "github.com/bmaupin/go-epub"
 	"github.com/go-pdf/fpdf"
 	"github.com/yuin/goldmark"
+	"golang.org/x/image/font/gofont/gobold"
+	"golang.org/x/image/font/gofont/gobolditalic"
+	"golang.org/x/image/font/gofont/goitalic"
+	"golang.org/x/image/font/gofont/goregular"
 )
 
 func (c *DocumentConverter) convertMarkdownToHTML(ctx context.Context, src, target string) error {
@@ -87,14 +91,22 @@ func (c *DocumentConverter) convertMarkdownToPDF(ctx context.Context, src, targe
 		return fmt.Errorf("failed to convert markdown: %w", err)
 	}
 
+	return writeHTMLAsPDF(target, htmlBuf.String())
+}
+
+func writeHTMLAsPDF(target, content string) error {
 	pdfDoc := fpdf.New("P", "mm", "A4", "")
 	pdfDoc.SetMargins(20, 20, 20)
 	pdfDoc.AddPage()
-	pdfDoc.SetFont("Arial", "", 12)
+	pdfDoc.AddUTF8FontFromBytes("Go", "", goregular.TTF)
+	pdfDoc.AddUTF8FontFromBytes("Go", "B", gobold.TTF)
+	pdfDoc.AddUTF8FontFromBytes("Go", "I", goitalic.TTF)
+	pdfDoc.AddUTF8FontFromBytes("Go", "BI", gobolditalic.TTF)
+	pdfDoc.SetFont("Go", "", 12)
 
 	_, lineHt := pdfDoc.GetFontSize()
 	html := pdfDoc.HTMLBasicNew()
-	html.Write(lineHt, htmlBuf.String())
+	html.Write(lineHt, content)
 
 	if err := pdfDoc.OutputFileAndClose(target); err != nil {
 		return fmt.Errorf("failed to create PDF: %w", err)

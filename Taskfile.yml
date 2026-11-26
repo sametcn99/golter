@@ -68,8 +68,7 @@ tasks:
     desc: Lint code (requires golangci-lint)
     cmds:
       - echo "Linting code..."
-      - cmd: golangci-lint run
-        ignore_error: true
+      - golangci-lint run
 
   deps:
     desc: Download dependencies

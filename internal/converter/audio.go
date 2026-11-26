@@ -125,7 +125,6 @@ func buildAudioFFmpegArgs(src, target string, quality audioQuality) []string {
 		// FLAC is lossless - no bitrate needed
 		args = append(args,
 			"-c:a", "flac",
-			"-ar", quality.sampleRate,
 		)
 
 	case strings.HasSuffix(targetLower, ".wav"):

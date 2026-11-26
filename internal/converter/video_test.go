@@ -3,6 +3,9 @@ package converter
 import (
 	"context"
 	"fmt"
+	"image"
+	"image/color"
+	"image/gif"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -57,10 +60,8 @@ func TestVideoConverter_Convert_Error(t *testing.T) {
 }
 
 func TestVideoConverter_Convert_Integration_Exhaustive(t *testing.T) {
-	// Check for ffmpeg
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not found, skipping integration test")
-	}
+	requireTool(t, "ffmpeg")
+	requireTool(t, "ffprobe")
 
 	tmpDir, err := os.MkdirTemp("", "golter_video_test")
 	if err != nil {
@@ -69,10 +70,7 @@ func TestVideoConverter_Convert_Integration_Exhaustive(t *testing.T) {
 	defer os.RemoveAll(tmpDir)
 
 	c := &VideoConverter{}
-	formats := []string{".mp4", ".avi", ".mkv", ".webm", ".mov"} // GIF is special, maybe test separately or include
-	// GIF generation might be different or slow, but let's include it if possible.
-	// ffmpeg testsrc to gif works.
-	formats = append(formats, ".gif")
+	formats := []string{".mp4", ".avi", ".mkv", ".webm", ".mov", ".gif"}
 
 	qualities := []string{"High", "Balanced", "Low"}
 
@@ -82,23 +80,13 @@ func TestVideoConverter_Convert_Integration_Exhaustive(t *testing.T) {
 		// Generate 0.5s video to be fast
 		cmd := exec.Command("ffmpeg", "-f", "lavfi", "-i", "testsrc=duration=0.5:size=64x64:rate=10", "-y", srcPath)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("Failed to generate %s: %v\nOutput: %s", ext, err, out)
-			// Don't fail completely, just skip this source if ffmpeg fails (e.g. codec missing)
-			continue
+			t.Fatalf("generate %s: %v\n%s", ext, err, out)
 		}
 	}
 
 	for _, srcExt := range formats {
 		srcPath := filepath.Join(tmpDir, "src"+srcExt)
-		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-			continue // Skip if generation failed
-		}
-
 		for _, targetExt := range formats {
-			if srcExt == targetExt {
-				continue // Skip same format conversion unless we want to test re-encoding (we do for compression)
-			}
-
 			for _, quality := range qualities {
 				testName := fmt.Sprintf("%s->%s (%s)", srcExt, targetExt, quality)
 				t.Run(testName, func(t *testing.T) {
@@ -112,9 +100,7 @@ func TestVideoConverter_Convert_Integration_Exhaustive(t *testing.T) {
 						return
 					}
 
-					if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-						t.Errorf("Target file not created: %s", targetPath)
-					}
+					assertMedia(t, targetPath, "video")
 				})
 			}
 		}
@@ -231,4 +217,35 @@ func contains(slice []string, items ...string) bool {
 		}
 	}
 	return false
+}
+
+func TestGIFToMKVAlpha(t *testing.T) {
+	requireTool(t, "ffmpeg")
+	requireTool(t, "ffprobe")
+	for _, alpha := range []uint8{0, 255} {
+		t.Run(fmt.Sprint(alpha), func(t *testing.T) {
+			dir := t.TempDir()
+			src := filepath.Join(dir, "palette.gif")
+			palette := color.Palette{color.NRGBA{A: alpha}, color.White}
+			frame := image.NewPaletted(image.Rect(0, 0, 65, 63), palette)
+			frame.SetColorIndex(10, 10, 1)
+			f, err := os.Create(src)
+			if err != nil {
+				t.Fatal(err)
+			}
+			err = gif.EncodeAll(f, &gif.GIF{Image: []*image.Paletted{frame, frame}, Delay: []int{10, 10}})
+			if closeErr := f.Close(); err != nil || closeErr != nil {
+				t.Fatal(err, closeErr)
+			}
+			dst := filepath.Join(dir, "palette.mkv")
+			if err := (&VideoConverter{}).Convert(t.Context(), src, dst, Options{Quality: "High"}); err != nil {
+				t.Fatal(err)
+			}
+			assertMedia(t, dst, "video")
+			out, err := exec.Command("ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries", "stream=width,height,pix_fmt", "-of", "csv=p=0", dst).Output()
+			if err != nil || strings.TrimSpace(string(out)) != "66,64,yuv420p" {
+				t.Fatalf("%s, %v", out, err)
+			}
+		})
+	}
 }

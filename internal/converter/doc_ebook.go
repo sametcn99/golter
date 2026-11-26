@@ -10,22 +10,24 @@ import (
 	"strings"
 
 	md "github.com/JohannesKaufmann/html-to-markdown"
-	"github.com/go-pdf/fpdf"
 	"github.com/taylorskalyo/goreader/epub"
 )
 
-func (c *DocumentConverter) convertEbookToMarkdown(ctx context.Context, src, target string, opts Options) error {
-	tempHTML, cleanup, err := tempPathWithExt("golter_ebook_html", ".html")
+func (c *DocumentConverter) convertEbookToTextFormat(ctx context.Context, src, target string, opts Options) error {
+	tempBook, cleanup, err := tempPathWithExt("golter_ebook", ".epub")
 	if err != nil {
 		return err
 	}
 	defer cleanup()
 
-	if err := c.convertEbookWithCalibre(ctx, src, tempHTML, opts); err != nil {
+	if err := c.convertEbookWithCalibre(ctx, src, tempBook, opts); err != nil {
 		return err
 	}
 
-	return c.convertHTMLToMarkdown(ctx, tempHTML, target)
+	if strings.EqualFold(filepath.Ext(target), ".html") {
+		return c.convertEPUBToHTML(ctx, tempBook, target)
+	}
+	return c.convertEPUBToMarkdown(ctx, tempBook, target)
 }
 
 func (c *DocumentConverter) convertEbookWithCalibre(ctx context.Context, src, target string, opts Options) error {
@@ -186,29 +188,19 @@ func (c *DocumentConverter) convertEPUBToPDF(ctx context.Context, src, target st
 	}
 
 	// Fallback: EPUB → HTML → PDF using fpdf (limited tag support)
-	tempHTML := strings.TrimSuffix(target, filepath.Ext(target)) + "_temp.html"
+	tempHTML, cleanup, err := tempPathWithExt("golter_pdf", ".html")
+	if err != nil {
+		return err
+	}
+	defer cleanup()
 	if err := c.convertEPUBToHTML(ctx, src, tempHTML); err != nil {
 		return err
 	}
-	defer os.Remove(tempHTML)
 
 	source, err := os.ReadFile(tempHTML)
 	if err != nil {
 		return fmt.Errorf("failed to read temp HTML file: %w", err)
 	}
 
-	pdfDoc := fpdf.New("P", "mm", "A4", "")
-	pdfDoc.SetMargins(20, 20, 20)
-	pdfDoc.AddPage()
-	pdfDoc.SetFont("Arial", "", 12)
-
-	_, lineHt := pdfDoc.GetFontSize()
-	html := pdfDoc.HTMLBasicNew()
-	html.Write(lineHt, string(source))
-
-	if err := pdfDoc.OutputFileAndClose(target); err != nil {
-		return fmt.Errorf("failed to create PDF: %w", err)
-	}
-
-	return nil
+	return writeHTMLAsPDF(target, string(source))
 }

@@ -3,9 +3,7 @@ package converter
 import (
 	"context"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
@@ -21,7 +19,7 @@ func TestDocumentConverter_SupportedExtensions(t *testing.T) {
 	if len(srcExts) == 0 {
 		t.Error("SupportedSourceExtensions returned empty list")
 	}
-	expectedSrc := []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
+	expectedSrc := []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx"}
 	for _, exp := range expectedSrc {
 		found := false
 		for _, got := range srcExts {
@@ -59,13 +57,11 @@ func TestDocumentConverter_Convert_Error(t *testing.T) {
 	}
 
 	// Test unsupported conversion
-	_ = c.Convert(context.Background(), "test.md", "out.jpg", Options{}) // File existence check is first, so create dummy
-	if err := os.WriteFile("test.md", []byte("test"), 0644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
+	src := filepath.Join(t.TempDir(), "test.md")
+	if err := os.WriteFile(src, []byte("test"), 0600); err != nil {
+		t.Fatal(err)
 	}
-	defer os.Remove("test.md")
-
-	err = c.Convert(context.Background(), "test.md", "out.jpg", Options{})
+	err = c.Convert(context.Background(), src, src+".jpg", Options{})
 	if err == nil {
 		t.Error("Convert should fail for unsupported conversion")
 	} else if !strings.Contains(err.Error(), "unsupported conversion") {
@@ -113,9 +109,9 @@ func TestDocumentConverter_CanConvert(t *testing.T) {
 
 		// CSV/Excel
 		{".csv", ".xlsx", true},
-		{".csv", ".xls", true},
+		{".csv", ".xls", false},
 		{".xlsx", ".csv", true},
-		{".xls", ".csv", true},
+		{".xls", ".csv", false},
 		{".csv", ".pdf", false},
 
 		// EPUB
@@ -150,11 +146,11 @@ func TestDocumentConverter_SupportedTargetFormats(t *testing.T) {
 		want []string
 	}{
 		{".pdf", []string{".md", ".pdf"}},
-		{".md", []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}},
+		{".md", []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw3", ".fb2"}},
 		{".csv", []string{".xlsx"}},
 		{".docx", []string{".md", ".html", ".txt"}},
-		{".epub", []string{".pdf", ".md", ".html", ".mobi", ".azw", ".azw3", ".fb2", ".txt"}},
-		{".mobi", []string{".epub", ".azw", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}},
+		{".epub", []string{".pdf", ".md", ".html", ".mobi", ".azw3", ".fb2", ".txt"}},
+		{".mobi", []string{".epub", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}},
 	}
 
 	for _, tt := range tests {
@@ -202,87 +198,4 @@ func createTestEPUB(t *testing.T, path string) {
 	if err := e.Write(path); err != nil {
 		t.Fatalf("failed to create test epub: %v", err)
 	}
-}
-
-func ensureEbookConvertInPath(t *testing.T) bool {
-	binName := "ebook-convert"
-	if runtime.GOOS == "windows" {
-		binName = "ebook-convert.exe"
-	}
-
-	if _, err := exec.LookPath(binName); err == nil {
-		return true
-	}
-
-	var candidates []string
-	if runtime.GOOS == "windows" {
-		candidates = []string{
-			`C:\\Program Files\\Calibre2\\ebook-convert.exe`,
-			`C:\\Program Files (x86)\\Calibre2\\ebook-convert.exe`,
-		}
-	} else {
-		candidates = []string{
-			"/usr/bin/ebook-convert",
-			"/usr/local/bin/ebook-convert",
-			"/snap/bin/ebook-convert",
-			"/opt/homebrew/bin/ebook-convert",
-		}
-	}
-
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			dir := filepath.Dir(p)
-			current := os.Getenv("PATH")
-			if !strings.Contains(current, dir) {
-				if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+current); err != nil {
-					t.Logf("failed to update PATH for ebook-convert: %v", err)
-					return false
-				}
-			}
-			return true
-		}
-	}
-
-	return false
-}
-
-func ensurePandocInPath(t *testing.T) bool {
-	binName := "pandoc"
-	if runtime.GOOS == "windows" {
-		binName = "pandoc.exe"
-	}
-
-	if _, err := exec.LookPath(binName); err == nil {
-		return true
-	}
-
-	var candidates []string
-	if runtime.GOOS == "windows" {
-		candidates = []string{
-			`C:\\Program Files\\Pandoc\\pandoc.exe`,
-			`C:\\Program Files (x86)\\Pandoc\\pandoc.exe`,
-		}
-	} else {
-		candidates = []string{
-			"/usr/bin/pandoc",
-			"/usr/local/bin/pandoc",
-			"/opt/homebrew/bin/pandoc",
-		}
-	}
-
-	for _, p := range candidates {
-		if _, err := os.Stat(p); err == nil {
-			dir := filepath.Dir(p)
-			current := os.Getenv("PATH")
-			if !strings.Contains(current, dir) {
-				if err := os.Setenv("PATH", dir+string(os.PathListSeparator)+current); err != nil {
-					t.Logf("failed to update PATH for pandoc: %v", err)
-					return false
-				}
-			}
-			return true
-		}
-	}
-
-	return false
 }

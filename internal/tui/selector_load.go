@@ -11,6 +11,7 @@ import (
 )
 
 func (s *Selector) loadFiles() {
+	s.list.ResetFilter()
 	entries, err := os.ReadDir(s.currentDir)
 	if err != nil {
 		// Handle error gracefully

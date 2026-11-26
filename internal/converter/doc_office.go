@@ -3,7 +3,9 @@ package converter
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 
@@ -150,22 +152,18 @@ func (c *DocumentConverter) convertExcelToCSV(ctx context.Context, src, target s
 		return fmt.Errorf("Excel sheet is empty")
 	}
 
-	// Create CSV file
-	csvFile, err := os.Create(target)
+	return writeCSVFile(target, rows)
+}
+
+func writeCSVFile(target string, rows [][]string) error {
+	file, err := os.Create(target)
 	if err != nil {
-		return fmt.Errorf("failed to create CSV file: %w", err)
+		return err
 	}
-	defer csvFile.Close()
+	return writeCSV(file, rows)
+}
 
-	// Write CSV content
-	writer := csv.NewWriter(csvFile)
-	defer writer.Flush()
-
-	for _, row := range rows {
-		if err := writer.Write(row); err != nil {
-			return fmt.Errorf("failed to write CSV row: %w", err)
-		}
-	}
-
-	return nil
+func writeCSV(file io.WriteCloser, rows [][]string) error {
+	writer := csv.NewWriter(file)
+	return errors.Join(writer.WriteAll(rows), file.Close())
 }

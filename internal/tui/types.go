@@ -51,11 +51,9 @@ type batchResult struct {
 	duration time.Duration
 }
 
-type progressMsg struct {
-	current int
-	total   int
-	file    string
-	status  string
+type fileFinished struct {
+	index  int
+	result conversionResult
 }
 
 type checkUpdateMsg struct {

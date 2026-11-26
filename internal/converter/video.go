@@ -143,6 +143,8 @@ func buildFFmpegArgs(src, target string, quality videoQuality) []string {
 		// H.265/HEVC for MKV (better compression)
 		args = append(args,
 			"-c:v", "libx265",
+			"-pix_fmt", "yuv420p",
+			"-vf", "pad=ceil(iw/2)*2:ceil(ih/2)*2",
 			"-crf", quality.crf,
 			"-preset", quality.preset,
 			"-c:a", "aac",

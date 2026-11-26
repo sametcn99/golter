@@ -68,13 +68,13 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 					// If different type, don't allow selection (silently ignore)
 				}
 				// Update item in list
-				s.list.SetItem(s.list.Index(), i)
-				return *s, nil
+				cmd := s.list.SetItem(s.list.GlobalIndex(), i)
+				return *s, cmd
 			}
 		case "a":
 			// Select all files of the same type in current directory
-			items := s.list.Items()
-			selectedCount := 0
+			items := append([]list.Item(nil), s.list.Items()...)
+
 			for idx, listItem := range items {
 				if i, ok := listItem.(item); ok && !i.isDir && i.info != nil {
 					ext := filepath.Ext(i.path)
@@ -89,27 +89,28 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 					if fileType == s.selectedFileType && !s.selected[i.path] {
 						s.selected[i.path] = true
 						i.selected = true
-						s.list.SetItem(idx, i)
-						selectedCount++
+						items[idx] = i
 					}
 				}
 			}
-			return *s, nil
+			cmd := s.list.SetItems(items)
+			return *s, cmd
 		case "d":
 			// Deselect all files globally
 			s.selected = make(map[string]bool)
 			s.selectedFileType = FileTypeUnknown
-			
-			items := s.list.Items()
+
+			items := append([]list.Item(nil), s.list.Items()...)
 			for idx, listItem := range items {
 				if i, ok := listItem.(item); ok && !i.isDir && i.info != nil {
 					if i.selected {
 						i.selected = false
-						s.list.SetItem(idx, i)
+						items[idx] = i
 					}
 				}
 			}
-			return *s, nil
+			cmd := s.list.SetItems(items)
+			return *s, cmd
 		case "h", "left":
 			// Go to parent directory
 			parent := filepath.Dir(s.currentDir)
@@ -134,7 +135,7 @@ func (s *Selector) Update(msg tea.Msg) (Selector, tea.Cmd) {
 			return *s, nil
 		case "G":
 			// Go to bottom
-			s.list.Select(len(s.list.Items()) - 1)
+			s.list.Select(max(0, len(s.list.VisibleItems())-1))
 			return *s, nil
 		}
 	}

@@ -31,6 +31,10 @@ func CheckForUpdates() (string, string, bool, error) {
 		Timeout: 2 * time.Second,
 	}
 
+	return checkForUpdates(&client, url, Current)
+}
+
+func checkForUpdates(client *http.Client, url, installed string) (string, string, bool, error) {
 	resp, err := client.Get(url)
 	if err != nil {
 		return "", "", false, err
@@ -47,7 +51,7 @@ func CheckForUpdates() (string, string, bool, error) {
 	}
 
 	latest := strings.TrimPrefix(release.TagName, "v")
-	current := strings.TrimPrefix(Current, "v")
+	current := strings.TrimPrefix(installed, "v")
 
 	if isNewer(current, latest) {
 		return latest, release.HTMLURL, true, nil

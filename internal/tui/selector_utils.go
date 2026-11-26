@@ -1,8 +1,9 @@
 package tui
 
 import (
-	"path/filepath"
 	"strings"
+
+	"github.com/charmbracelet/x/ansi"
 )
 
 // FileType represents the type of file (image, video, audio, document)
@@ -36,13 +37,13 @@ func (ft FileType) String() string {
 func getFileType(ext string) FileType {
 	ext = strings.ToLower(ext)
 	switch ext {
-	case ".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp", ".tiff":
+	case ".jpg", ".jpeg", ".png", ".webp":
 		return FileTypeImage
-	case ".mp4", ".avi", ".mkv", ".webm", ".mov", ".wmv", ".flv":
+	case ".mp4", ".avi", ".mkv", ".webm", ".mov", ".gif":
 		return FileTypeVideo
 	case ".mp3", ".wav", ".flac", ".aac", ".ogg", ".m4a":
 		return FileTypeAudio
-	case ".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".doc", ".docx", ".csv", ".xlsx", ".xls":
+	case ".pdf", ".md", ".html", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".docx", ".csv", ".xlsx", ".json", ".yaml", ".yml", ".toml", ".xml":
 		return FileTypeDocument
 	default:
 		return FileTypeUnknown
@@ -69,7 +70,7 @@ func getFileIcon(ext string) string {
 		return iconEPUB
 	case ".csv":
 		return iconCSV
-	case ".xlsx", ".xls":
+	case ".xlsx":
 		return iconExcel
 	case ".doc", ".docx":
 		return iconDocument
@@ -82,24 +83,15 @@ func getFileIcon(ext string) string {
 
 // truncatePath shortens a path to fit within maxWidth
 func truncatePath(path string, maxWidth int) string {
-	if len(path) <= maxWidth {
+	if maxWidth <= 0 {
+		return ""
+	}
+	width := ansi.StringWidth(path)
+	if width <= maxWidth {
 		return path
 	}
-
-	// Try to show the last few path components
-	parts := strings.Split(path, string(filepath.Separator))
-	if len(parts) <= 2 {
-		return "..." + path[len(path)-maxWidth+3:]
+	if maxWidth == 1 {
+		return "…"
 	}
-
-	// Build from the end
-	result := parts[len(parts)-1]
-	for i := len(parts) - 2; i >= 0; i-- {
-		if len(parts[i])+len(result)+4 > maxWidth {
-			break
-		}
-		result = parts[i] + string(filepath.Separator) + result
-	}
-
-	return "..." + string(filepath.Separator) + result
+	return ansi.Truncate(ansi.TruncateLeft(path, width-maxWidth+1, "…"), maxWidth, "")
 }

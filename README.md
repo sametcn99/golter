@@ -47,7 +47,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 **Features:**
 
 - Quality-based compression (92% High, 75% Balanced, 55% Compact)
-- WebP lossless mode for highest quality
+- Lossless 8-bit WebP with alpha at High quality
 - Optimized PNG compression levels
 
 ### Videos
@@ -58,7 +58,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 
 **Features:**
 
-- H.264/H.265 encoding for MP4/MKV
+- H.264 for MP4 and H.265 for MKV. MKV uses opaque YUV 4:2:0 and pads odd dimensions to even sizes
 - VP9 encoding for WebM
 - Optimized GIF creation with palette generation
 - Multi-threaded encoding
@@ -73,26 +73,28 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 **Features:**
 
 - Bitrate control (320k High, 192k Balanced, 128k Compact)
-- FLAC lossless support
-- Opus/Vorbis encoding for OGG
+- FLAC lossless encoding at the input sample rate
+- Vorbis encoding for OGG
 
 > **Note:** Video and audio conversion requires `ffmpeg`. Ebook conversions beyond EPUB require Calibre's `ebook-convert`. DOCX conversions require Pandoc.
 
 ### Documents
 
-| Input                                     | Output                                                                     |
-|-------------------------------------------|----------------------------------------------------------------------------|
-| `.pdf`, `.md`, `.html`                    | `.pdf`, `.md`, `.html`, `.docx`, `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` |
-| `.docx`                                   | `.md`, `.html`, `.txt`                                                     |
-| `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2` | `.epub`, `.mobi`, `.azw`, `.azw3`, `.fb2`, `.pdf`, `.html`, `.txt`, `.md`  |
-| `.csv`                                    | `.xlsx`                                                                    |
-| `.xlsx`, `.xls`                           | `.csv`                                                                     |
-| `.json`                                   | `.yaml`, `.yml`, `.xml`, `.csv`, `.xlsx`, `.xls`                           |
-| `.yaml`, `.yml`                           | `.json`, `.toml`                                                           |
-| `.toml`                                   | `.yaml`, `.yml`                                                            |
-| `.xml`                                    | `.json`                                                                    |
-| `.csv`                                    | `.json`                                                                    |
-| `.xlsx`, `.xls`                           | `.json`                                                                    |
+| Input | Available outputs |
+|---|---|
+| PDF | Markdown, optimized PDF |
+| Markdown | HTML, PDF, DOCX, EPUB, MOBI, AZW3, FB2 |
+| HTML | Markdown, DOCX, EPUB, MOBI, AZW3, FB2 |
+| DOCX | Markdown, HTML, plain text |
+| EPUB, MOBI, AZW, AZW3, FB2 | PDF, HTML, plain text, Markdown, EPUB, MOBI, AZW3, FB2 (excluding the source format) |
+| CSV | XLSX, JSON |
+| XLSX (first sheet) | CSV, JSON |
+| JSON | YAML (.yaml or .yml), XML, CSV, XLSX |
+| YAML (.yaml or .yml) | JSON, TOML |
+| TOML | YAML (.yaml or .yml) |
+| XML | JSON |
+
+AZW is an input format. Use AZW3 for Kindle output. For Excel 97–2003 workbooks, save a copy as XLSX before converting. CSV and XLSX exports to JSON require unique column names. Empty headers are assigned positional names such as `col1`.
 
 **Features:**
 
@@ -113,7 +115,7 @@ Terminal-based file converter built with Go. It provides a modern, user-friendly
 
 ### Prerequisites
 
-- **Go 1.21+**
+- **Go 1.24.4+** and a C compiler for CGO (WebP). On Windows, use a GCC toolchain compatible with Go, such as MinGW-w64.
 - **ffmpeg** (required for video/audio conversion)
 - **Calibre (ebook-convert)** (required for ebook conversions beyond EPUB)
 - **Pandoc** (required for DOCX conversions)
@@ -144,9 +146,8 @@ task build
 | `task clean`     | Removes build artifacts          |
 | `task test`      | Runs the test suite              |
 | `task fmt`       | Formats the code                 |
-| `task build-all` | Cross-compiles for all platforms |
-| `task install`   | Installs to GOPATH/bin           |
-| `task test`      | Runs tests                       |
+| `task build-all` | Builds platform targets (requires matching CGO toolchains) |
+| `task install`   | Installs the executable for the current user |
 
 ### Platform-Specific Setup
 
@@ -155,13 +156,13 @@ task build
 
 ```bash
 # Ubuntu/Debian
-sudo apt update && sudo apt install ffmpeg calibre pandoc
+sudo apt update && sudo apt install build-essential ffmpeg calibre pandoc
 
 # Fedora
-sudo dnf install ffmpeg calibre pandoc
+sudo dnf install gcc ffmpeg calibre pandoc
 
 # Arch Linux
-sudo pacman -S ffmpeg calibre pandoc
+sudo pacman -S base-devel ffmpeg calibre pandoc
 
 # Build
 go build -o golter main.go
@@ -239,6 +240,8 @@ Start in a specific directory:
 ./golter /path/to/your/media
 ```
 
+A batch offers only formats shared by every selected file. Compression is available when all inputs support their own format. Existing destinations and inputs that map to the same destination are reported as conflicts. Other files continue. Golter publishes each completed output beside its source. Ctrl+C during a batch cancels pending work and shows the results after running workers finish.
+
 ### Keyboard Controls
 
 | Key       | Action                        |
@@ -257,6 +260,17 @@ Start in a specific directory:
 | `G`       | Go to bottom                  |
 | `Esc`     | Go back / Cancel              |
 | `q`       | Quit application              |
+
+## Running the tests
+
+Run `go test ./...` for the local suite. The full Linux suite uses FFmpeg and FFprobe, Pandoc, Calibre and Poppler's pdftotext. With these available on PATH, run:
+
+```sh
+GOLTER_REQUIRE_TOOLS=1 QT_QPA_PLATFORM=offscreen go test -race -json -count=1 -coverprofile=coverage.out ./... > test-results.jsonl
+python3 tests/coverage_summary.py test-results.jsonl coverage.out
+```
+
+The strict run fails on missing tools or failed fixture generation. The summary checks every expected media conversion and quality combination. The release workflow also drives the built executable through a native terminal on each platform, converts an XML file and reads back the JSON values.
 
 ## Notes
 

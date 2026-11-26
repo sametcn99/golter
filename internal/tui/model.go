@@ -32,7 +32,6 @@ type Model struct {
 	err             error
 	quitting        bool
 	manager         *converter.Manager
-	targetFormat    string
 	width           int
 	height          int
 	startTime       time.Time
@@ -40,6 +39,10 @@ type Model struct {
 	updateUrl       string
 	updateAvailable bool
 	cancelCtx       context.CancelFunc
+	batchCtx        context.Context
+	results         []conversionResult
+	nextIndex       int
+	quality         string
 }
 
 // NewModel creates a new Model with initial configuration
@@ -51,15 +54,8 @@ func NewModel(initialPath string) Model {
 	mgr.Register(&converter.DocDataConverter{})
 	mgr.Register(&converter.AudioConverter{})
 
-	if initialPath == "" {
-		// Default to user's home directory (cross-platform)
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			// Fallback to current directory if home cannot be determined
-			initialPath, _ = filepath.Abs(".")
-		} else {
-			initialPath = homeDir
-		}
+	if abs, err := filepath.Abs(initialPath); err == nil {
+		initialPath = abs
 	}
 
 	// Ensure initialPath is a directory

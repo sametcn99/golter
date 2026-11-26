@@ -57,10 +57,8 @@ func TestAudioConverter_Convert_Error(t *testing.T) {
 }
 
 func TestAudioConverter_Convert_Integration_Exhaustive(t *testing.T) {
-	// Check for ffmpeg
-	if _, err := exec.LookPath("ffmpeg"); err != nil {
-		t.Skip("ffmpeg not found, skipping integration test")
-	}
+	requireTool(t, "ffmpeg")
+	requireTool(t, "ffprobe")
 
 	tmpDir, err := os.MkdirTemp("", "golter_audio_test")
 	if err != nil {
@@ -78,22 +76,13 @@ func TestAudioConverter_Convert_Integration_Exhaustive(t *testing.T) {
 		// Generate 0.5s stereo audio
 		cmd := exec.Command("ffmpeg", "-f", "lavfi", "-i", "sine=frequency=1000:duration=0.5", "-ac", "2", "-y", srcPath)
 		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Logf("Failed to generate %s: %v\nOutput: %s", ext, err, out)
-			continue
+			t.Fatalf("generate %s: %v\n%s", ext, err, out)
 		}
 	}
 
 	for _, srcExt := range formats {
 		srcPath := filepath.Join(tmpDir, "src"+srcExt)
-		if _, err := os.Stat(srcPath); os.IsNotExist(err) {
-			continue
-		}
-
 		for _, targetExt := range formats {
-			if srcExt == targetExt {
-				continue
-			}
-
 			for _, quality := range qualities {
 				testName := fmt.Sprintf("%s->%s (%s)", srcExt, targetExt, quality)
 				t.Run(testName, func(t *testing.T) {
@@ -107,9 +96,7 @@ func TestAudioConverter_Convert_Integration_Exhaustive(t *testing.T) {
 						return
 					}
 
-					if _, err := os.Stat(targetPath); os.IsNotExist(err) {
-						t.Errorf("Target file not created: %s", targetPath)
-					}
+					assertMedia(t, targetPath, "audio")
 				})
 			}
 		}
@@ -201,5 +188,22 @@ func TestBuildAudioFFmpegArgs(t *testing.T) {
 				t.Errorf("buildAudioFFmpegArgs() args = %v, failed check", args)
 			}
 		})
+	}
+}
+
+func TestFLACPreservesSampleRate(t *testing.T) {
+	ffmpeg := requireTool(t, "ffmpeg")
+	probe := requireTool(t, "ffprobe")
+	dir := t.TempDir()
+	src, dst := filepath.Join(dir, "96k.wav"), filepath.Join(dir, "out.flac")
+	if out, e := exec.Command(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "sine=sample_rate=96000:duration=0.1", src).CombinedOutput(); e != nil {
+		t.Fatalf("%s, %v", out, e)
+	}
+	if e := (&AudioConverter{}).Convert(t.Context(), src, dst, Options{Quality: "High"}); e != nil {
+		t.Fatal(e)
+	}
+	out, e := exec.Command(probe, "-v", "error", "-select_streams", "a:0", "-show_entries", "stream=sample_rate", "-of", "csv=p=0", dst).Output()
+	if e != nil || strings.TrimSpace(string(out)) != "96000" {
+		t.Fatalf("FLAC sample rate %q: %v", out, e)
 	}
 }

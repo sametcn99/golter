@@ -42,33 +42,11 @@ func (c *DocumentConverter) Name() string {
 }
 
 func (c *DocumentConverter) CanConvert(srcExt, targetExt string) bool {
-	srcExt = normalizeExt(srcExt)
-	targetExt = normalizeExt(targetExt)
-
-	switch srcExt {
-	case ".pdf":
-		return targetExt == ".md" || targetExt == ".pdf"
-	case ".md":
-		return targetExt == ".pdf" || targetExt == ".html" || targetExt == ".docx" || isEbookExt(targetExt)
-	case ".html":
-		return targetExt == ".md" || targetExt == ".docx" || isEbookExt(targetExt)
-	case ".docx":
-		return targetExt == ".md" || targetExt == ".html" || targetExt == ".txt"
-	case ".csv":
-		return targetExt == ".xlsx" || targetExt == ".xls"
-	case ".xlsx", ".xls":
-		return targetExt == ".csv"
-	case ".epub", ".mobi", ".azw", ".azw3", ".fb2":
-		if isEbookExt(targetExt) {
-			return srcExt != targetExt
-		}
-		return targetExt == ".pdf" || targetExt == ".md" || targetExt == ".html" || targetExt == ".txt"
-	}
-	return false
+	return slices.Contains(c.SupportedTargetFormats(srcExt), normalizeExt(targetExt))
 }
 
 func (c *DocumentConverter) SupportedSourceExtensions() []string {
-	return []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx", ".xls"}
+	return []string{".pdf", ".md", ".html", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2", ".csv", ".xlsx"}
 }
 
 func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
@@ -78,19 +56,19 @@ func (c *DocumentConverter) SupportedTargetFormats(srcExt string) []string {
 	case ".pdf":
 		return []string{".md", ".pdf"} // .pdf -> .pdf implies compression
 	case ".md":
-		return []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
+		return []string{".html", ".pdf", ".docx", ".epub", ".mobi", ".azw3", ".fb2"}
 	case ".html":
-		return []string{".md", ".docx", ".epub", ".mobi", ".azw", ".azw3", ".fb2"}
+		return []string{".md", ".docx", ".epub", ".mobi", ".azw3", ".fb2"}
 	case ".docx":
 		return []string{".md", ".html", ".txt"}
 	case ".csv":
 		return []string{".xlsx"}
-	case ".xlsx", ".xls":
+	case ".xlsx":
 		return []string{".csv"}
 	case ".epub":
-		return []string{".pdf", ".md", ".html", ".mobi", ".azw", ".azw3", ".fb2", ".txt"}
+		return []string{".pdf", ".md", ".html", ".mobi", ".azw3", ".fb2", ".txt"}
 	case ".mobi", ".azw", ".azw3", ".fb2":
-		allTargets := []string{".epub", ".mobi", ".azw", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}
+		allTargets := []string{".epub", ".mobi", ".azw3", ".fb2", ".pdf", ".html", ".txt", ".md"}
 		filtered := make([]string, 0, len(allTargets))
 		for _, t := range allTargets {
 			if t == srcExt {
@@ -107,6 +85,9 @@ func (c *DocumentConverter) Convert(ctx context.Context, src, target string, opt
 	srcExt := normalizeExt(filepath.Ext(src))
 	targetExt := normalizeExt(filepath.Ext(target))
 
+	if !c.CanConvert(srcExt, targetExt) {
+		return fmt.Errorf("unsupported conversion: %s to %s", srcExt, targetExt)
+	}
 	// Validate source file exists
 	if _, err := os.Stat(src); errors.Is(err, fs.ErrNotExist) {
 		return fmt.Errorf("source file not found: %s", src)
@@ -142,42 +123,27 @@ func (c *DocumentConverter) Convert(ctx context.Context, src, target string, opt
 			return c.convertHTMLToEbook(ctx, src, target, opts)
 		}
 	case ".docx":
-		if targetExt == ".md" || targetExt == ".html" || targetExt == ".txt" {
-			return c.convertWithPandoc(ctx, src, target, opts)
-		}
+		return c.convertWithPandoc(ctx, src, target, opts)
 	case ".csv":
-		if targetExt == ".xlsx" || targetExt == ".xls" {
-			return c.convertCSVToExcel(ctx, src, target)
-		}
-	case ".xlsx", ".xls":
-		if targetExt == ".csv" {
-			return c.convertExcelToCSV(ctx, src, target)
-		}
+		return c.convertCSVToExcel(ctx, src, target)
+	case ".xlsx":
+		return c.convertExcelToCSV(ctx, src, target)
 	case ".epub":
-		if targetExt == srcExt {
-			break
-		}
-		if targetExt == ".md" {
+		switch targetExt {
+		case ".md":
 			return c.convertEPUBToMarkdown(ctx, src, target)
-		} else if targetExt == ".html" {
+		case ".html":
 			return c.convertEPUBToHTML(ctx, src, target)
-		} else if targetExt == ".pdf" {
+		case ".pdf":
 			return c.convertEPUBToPDF(ctx, src, target)
-		} else if isEbookExt(targetExt) {
-			return c.convertEbookWithCalibre(ctx, src, target, opts)
-		} else if targetExt == ".txt" {
+		default:
 			return c.convertEbookWithCalibre(ctx, src, target, opts)
 		}
 	case ".mobi", ".azw", ".azw3", ".fb2":
-		if targetExt == srcExt {
-			break
+		if targetExt == ".md" || targetExt == ".html" {
+			return c.convertEbookToTextFormat(ctx, src, target, opts)
 		}
-		if targetExt == ".md" {
-			return c.convertEbookToMarkdown(ctx, src, target, opts)
-		} else if targetExt == ".html" || targetExt == ".pdf" || targetExt == ".txt" || isEbookExt(targetExt) {
-			return c.convertEbookWithCalibre(ctx, src, target, opts)
-		}
+		return c.convertEbookWithCalibre(ctx, src, target, opts)
 	}
-
 	return fmt.Errorf("unsupported conversion: %s to %s", srcExt, targetExt)
 }

@@ -1,17 +1,14 @@
 package tui
 
 import (
-	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"time"
 
-	"github.com/sametcn99/golter/internal/converter"
 	"github.com/sametcn99/golter/internal/version"
 
+	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -43,6 +40,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	case tea.KeyMsg:
+		if m.state == StateSelecting && m.selector.list.FilterState() == list.Filtering && msg.String() != "ctrl+c" {
+			var cmd tea.Cmd
+			m.selector, cmd = m.selector.Update(msg)
+			return m, cmd
+		}
 		if m.state == StateQuitting {
 			switch msg.String() {
 			case "y", "Y", "enter":
@@ -92,20 +94,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		} else {
 			if msg.String() == "ctrl+c" {
-				m.quitting = true
+				m.currentStatus = "Cancelling..."
 				if m.cancelCtx != nil {
 					m.cancelCtx()
 				}
-				return m, tea.Quit
+				return m, nil
 			}
 		}
 
-	case progressMsg:
-		m.progressCurrent = msg.current
-		m.progressTotal = msg.total
-		m.currentFile = msg.file
-		m.currentStatus = msg.status
-		return m, nil
+	case fileFinished:
+		m.results[msg.index] = msg.result
+		m.progressCurrent++
+		m.currentFile = msg.result.path
+		if m.batchCtx.Err() == nil {
+			m.currentStatus = "Converting files..."
+		}
+		if m.progressCurrent == m.progressTotal {
+			finished := batchResult{m.results, time.Since(m.startTime)}
+			m.cancelCtx()
+			m.cancelCtx = nil
+			m.batchCtx = nil
+			return m.Update(finished)
+		}
+		cmd := m.nextFile()
+		return m, cmd
 
 	case batchResult:
 		m.state = StateDone
@@ -113,7 +125,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		successCount := 0
 		var errs []string
 		var successFiles []string
-		var totalSaved int64
 
 		for _, res := range msg.results {
 			if res.err != nil {
@@ -150,14 +161,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = fmt.Errorf("All conversions failed:\n%s", strings.Join(errs, "\n"))
 		} else {
 			// All success
-			savedStr := ""
-			if totalSaved > 0 {
-				savedStr = fmt.Sprintf(" (saved %s)", FormatSize(totalSaved))
-			}
-			m.output = fmt.Sprintf("Successfully converted %d files in %s%s\n\n%s",
-				successCount,
-				totalDuration,
-				savedStr,
+			m.output = fmt.Sprintf("Successfully converted %d files in %s\n\n%s",
+				successCount, totalDuration,
 				strings.Join(successFiles, "\n"),
 			)
 		}
@@ -191,16 +196,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = StateSelectingAction
 				m.cursor = 0
 
-				// Prepare action options
-				ext := filepath.Ext(files[0])
-				supportedTargets := m.manager.GetSupportedTargetFormats(ext)
-				var availableActions []string
-				if len(supportedTargets) > 0 {
-					availableActions = append(availableActions, iconConvert+"  Convert Format")
-				}
-				availableActions = append(availableActions, iconCompress+"  Compress Files")
-				m.actionOptions = availableActions
-
+				m.targetFormats, m.actionOptions = selectionOptions(files, m.manager)
 				return m, nil
 			}
 		}
@@ -218,23 +214,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor++
 				}
 			case "enter":
+				if len(m.actionOptions) == 0 {
+					return m, nil
+				}
 				selectedAction := m.actionOptions[m.cursor]
 
 				if strings.Contains(selectedAction, "Convert Format") {
-					ext := filepath.Ext(m.selectedFiles[0])
-					m.targetFormats = m.manager.GetSupportedTargetFormats(ext)
-
-					if len(m.targetFormats) == 0 {
-						m.err = fmt.Errorf("no supported target formats for %s", ext)
-						m.state = StateDone
-						return m, nil
-					}
-
 					m.state = StateSelectingFormat
 					m.cursor = 0
 				} else {
 					// Compress Files - keep original format
-					m.targetFormat = ""
 					m.state = StateSelectingQuality
 					m.cursor = 0
 				}
@@ -254,20 +243,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor++
 				}
 			case "enter":
-				m.targetFormat = m.targetFormats[m.cursor]
-				m.state = StateConverting
-				m.progressCurrent = 0
-				m.progressTotal = len(m.selectedFiles)
-				m.startTime = time.Now()
-				m.currentStatus = "Starting conversion..."
-
-				ctx, cancel := context.WithCancel(context.Background())
-				m.cancelCtx = cancel
-
-				return m, tea.Batch(
-					m.spinner.Tick,
-					convertFilesWithProgress(ctx, m.selectedFiles, m.targetFormat, "High", m.manager),
-				)
+				return m.startBatch(m.targetFormats[m.cursor], "High")
 			}
 		}
 
@@ -283,20 +259,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.cursor++
 				}
 			case "enter":
-				quality := m.qualityOptions[m.cursor]
-				m.state = StateConverting
-				m.progressCurrent = 0
-				m.progressTotal = len(m.selectedFiles)
-				m.startTime = time.Now()
-				m.currentStatus = "Starting compression..."
-
-				ctx, cancel := context.WithCancel(context.Background())
-				m.cancelCtx = cancel
-
-				return m, tea.Batch(
-					m.spinner.Tick,
-					convertFilesWithProgress(ctx, m.selectedFiles, m.targetFormat, quality, m.manager),
-				)
+				return m.startBatch("", m.qualityOptions[m.cursor])
 			}
 		}
 
@@ -307,101 +270,4 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
-}
-
-func convertFilesWithProgress(ctx context.Context, files []string, targetExt string, quality string, mgr *converter.Manager) tea.Cmd {
-	return func() tea.Msg {
-		startTime := time.Now()
-		var results []conversionResult
-		var mu sync.Mutex
-		var completed int32
-
-		opts := converter.Options{
-			Quality: quality,
-		}
-
-		// Determine optimal concurrency based on file count
-		concurrency := 4
-		if len(files) < concurrency {
-			concurrency = len(files)
-		}
-
-		// Process files concurrently with semaphore
-		var wg sync.WaitGroup
-		semaphore := make(chan struct{}, concurrency)
-
-		for _, path := range files {
-			wg.Add(1)
-			go func(path string) {
-				defer wg.Done()
-
-				select {
-				case <-ctx.Done():
-					mu.Lock()
-					results = append(results, conversionResult{
-						path:     path,
-						err:      fmt.Errorf("cancelled: %w", ctx.Err()),
-						duration: 0,
-					})
-					atomic.AddInt32(&completed, 1)
-					mu.Unlock()
-					return
-				case semaphore <- struct{}{}:
-				}
-				defer func() { <-semaphore }()
-
-				fileStart := time.Now()
-
-				ext := filepath.Ext(path)
-				effectiveTargetExt := targetExt
-				if effectiveTargetExt == "" {
-					effectiveTargetExt = ext
-				}
-
-				conv, err := mgr.FindConverter(ext, effectiveTargetExt)
-				if err != nil {
-					mu.Lock()
-					results = append(results, conversionResult{
-						path:     path,
-						err:      err,
-						duration: time.Since(fileStart),
-					})
-					atomic.AddInt32(&completed, 1)
-					mu.Unlock()
-					return
-				}
-
-				var outputPath string
-				if targetExt == "" {
-					// Compression mode
-					outputPath = strings.TrimSuffix(path, ext) + "_compressed" + ext
-				} else {
-					// Conversion mode
-					outputPath = strings.TrimSuffix(path, ext) + targetExt
-					if outputPath == path {
-						outputPath = strings.TrimSuffix(path, ext) + "_converted" + targetExt
-					}
-				}
-
-				err = conv.Convert(ctx, path, outputPath, opts)
-				duration := time.Since(fileStart)
-
-				mu.Lock()
-				results = append(results, conversionResult{
-					path:       path,
-					outputPath: outputPath,
-					err:        err,
-					duration:   duration,
-				})
-				atomic.AddInt32(&completed, 1)
-				mu.Unlock()
-			}(path)
-		}
-
-		wg.Wait()
-		return batchResult{
-			results:  results,
-			duration: time.Since(startTime),
-		}
-	}
 }

@@ -41,9 +41,7 @@ func TestDocumentConverter_EPUB(t *testing.T) {
 }
 
 func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
-	if !ensureEbookConvertInPath(t) {
-		t.Skip("ebook-convert not found, skipping ebook conversion tests")
-	}
+	requireTool(t, "ebook-convert")
 
 	tmpDir, err := os.MkdirTemp("", "golter_ebook_test")
 	if err != nil {
@@ -69,6 +67,10 @@ func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
 
 	t.Run("MOBI->EPUB", func(t *testing.T) {
 		mobiPath := filepath.Join(tmpDir, "test.mobi")
+		mobiPath = filepath.Join(t.TempDir(), "input.mobi")
+		if err := c.Convert(context.Background(), epubPath, mobiPath, Options{}); err != nil {
+			t.Fatal(err)
+		}
 		backToEPUB := filepath.Join(tmpDir, "back.epub")
 		if err := c.Convert(context.Background(), mobiPath, backToEPUB, Options{}); err != nil {
 			t.Fatalf("Convert(MOBI->EPUB) failed: %v", err)
@@ -90,9 +92,7 @@ func TestDocumentConverter_Convert_Integration_EbookCalibre(t *testing.T) {
 }
 
 func TestDocumentConverter_Convert_EbookFromMarkdownAndHTML(t *testing.T) {
-	if !ensureEbookConvertInPath(t) {
-		t.Skip("ebook-convert not found, skipping ebook conversion tests")
-	}
+	requireTool(t, "ebook-convert")
 
 	tmpDir, err := os.MkdirTemp("", "golter_ebook_src_test")
 	if err != nil {

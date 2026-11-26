@@ -31,21 +31,21 @@ func TestDocumentConverter_Office(t *testing.T) {
 
 	t.Run("XLSX->CSV", func(t *testing.T) {
 		xlsxPath := filepath.Join(tmpDir, "test.xlsx")
-		// Ensure previous step created the file
-		if _, err := os.Stat(xlsxPath); err != nil {
-			t.Skip("test.xlsx not found, skipping reverse conversion")
+		// Build an independent reverse-conversion fixture.
+		xlsxPath = filepath.Join(t.TempDir(), filepath.Base(xlsxPath))
+		if err := c.Convert(context.Background(), csvPath, xlsxPath, Options{}); err != nil {
+			t.Fatal(err)
 		}
 		targetCsv := filepath.Join(tmpDir, "back_to.csv")
 		if err := c.Convert(context.Background(), xlsxPath, targetCsv, Options{}); err != nil {
-			t.Errorf("Convert(XLSX->CSV) failed: %v", err)
+			t.Fatalf("Convert(XLSX->CSV) failed: %v", err)
 		}
+		assertText(t, targetCsv, "Name,Age\nA,1\nB,2")
 	})
 }
 
 func TestDocumentConverter_Convert_DocxPandoc(t *testing.T) {
-	if !ensurePandocInPath(t) {
-		t.Skip("pandoc not found, skipping DOCX conversion tests")
-	}
+	requireTool(t, "pandoc")
 
 	tmpDir, err := os.MkdirTemp("", "golter_docx_test")
 	if err != nil {
@@ -74,16 +74,15 @@ func TestDocumentConverter_Convert_DocxPandoc(t *testing.T) {
 	// DOCX -> MD
 	t.Run("DOCX->MD", func(t *testing.T) {
 		docxPath := filepath.Join(tmpDir, "out.docx")
-		// Ensure previous step created the file
-		if _, err := os.Stat(docxPath); err != nil {
-			t.Skip("out.docx not found, skipping reverse conversion")
+		// Build an independent reverse-conversion fixture.
+		docxPath = filepath.Join(t.TempDir(), filepath.Base(docxPath))
+		if err := c.Convert(context.Background(), mdPath, docxPath, Options{}); err != nil {
+			t.Fatal(err)
 		}
 		backToMD := filepath.Join(tmpDir, "back.md")
 		if err := c.Convert(context.Background(), docxPath, backToMD, Options{}); err != nil {
 			t.Fatalf("Convert(DOCX->MD) failed: %v", err)
 		}
-		if _, err := os.Stat(backToMD); os.IsNotExist(err) {
-			t.Fatalf("Target MD not created: %s", backToMD)
-		}
+		assertText(t, backToMD, "Hello docx")
 	})
 }
