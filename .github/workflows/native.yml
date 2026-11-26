@@ -45,7 +45,26 @@ jobs:
           git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
           git checkout --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          go version
+
+      - name: Install pinned Go on macOS
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          ARCH: ${{ matrix.arch }}
+        run: |
+          case "$ARCH" in
+            amd64) digest=69bef555e114b4a2252452b6e7049afc31fbdf2d39790b669165e89525cd3f5c ;;
+            arm64) digest=27973684b515eaf461065054e6b572d9390c05e69ba4a423076c160165336470 ;;
+          esac
+          cd "$RUNNER_TEMP"
+          curl --fail --location --retry 3 "https://go.dev/dl/$GOTOOLCHAIN.darwin-$ARCH.tar.gz" -o golang.tar.gz
+          echo "$digest  golang.tar.gz" | shasum -a 256 -c -
+          tar -xzf golang.tar.gz
+          echo "$RUNNER_TEMP/go/bin" >> "$GITHUB_PATH"
+
+      - name: Verify Go toolchain
+        shell: bash
+        run: test "$(go env GOVERSION)" = "$GOTOOLCHAIN"
 
       - name: Install integration tools
         if: runner.os == 'Linux'
