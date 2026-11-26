@@ -11,129 +11,64 @@ permissions:
   contents: read
 
 jobs:
-  setup:
-    runs-on: ubuntu-latest
-    outputs:
-      version: ${{ steps.version.outputs.version }}
-    steps:
-      - id: version
-        run: |
-          VERSION=$(date +"%Y.%m.%d.%H%M%S")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
+  check-pr:
+    if: github.event_name == 'pull_request'
+    uses: ./.github/workflows/native.yml
+    with:
+      version: pr-${{ github.event.number }}
 
-  build:
-    needs: setup
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: linux
-            arch: amd64
-            runner: ubuntu-latest
-            ext: ""
-          - os: windows
-            arch: amd64
-            runner: windows-latest
-            ext: ".exe"
-          - os: darwin
-            arch: amd64
-            runner: macos-15-intel
-            ext: ""
-          - os: darwin
-            arch: arm64
-            runner: macos-latest
-            ext: ""
-    runs-on: ${{ matrix.runner }}
-    steps:
-      - name: Checkout Code
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.24.4'
-
-      - name: Set up Python for terminal acceptance
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Install integration tools
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y ffmpeg pandoc calibre poppler-utils
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Full integration and race tests
-        if: runner.os == 'Linux'
-        env:
-          GOLTER_REQUIRE_TOOLS: '1'
-          QT_QPA_PLATFORM: offscreen
-        shell: bash
-        run: |
-          set -o pipefail
-          go test -race -json -count=1 -coverprofile=coverage.out ./... | tee test-results.jsonl
-          python tests/coverage_summary.py test-results.jsonl coverage.out >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload Linux test evidence
-        if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v4
-        with:
-          name: linux-test-evidence
-          path: |
-            coverage.out
-            test-results.jsonl
-
-      - name: Native tests
-        if: runner.os != 'Linux'
-        run: go test -count=1 ./...
-
-      - name: Build Application
-        shell: bash
-        run: |
-          mkdir -p bin
-          VERSION=${{ needs.setup.outputs.version }}
-          LDFLAGS="-s -w -X 'github.com/sametcn99/golter/internal/version.Current=$VERSION'"
-          export CGO_ENABLED=1
-          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags="$LDFLAGS" -o bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} .
-
-      - name: Exercise the built executable in a terminal
-        shell: bash
-        run: |
-          python -m pip install 'ptyprocess==0.7.0; sys_platform != "win32"' 'pywinpty>=2,<4; sys_platform == "win32"'
-          python tests/terminal_smoke.py bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
-
-      - name: Upload Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: golter-${{ matrix.os }}-${{ matrix.arch }}
-          path: bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
-
-  release:
+  draft:
     if: github.event_name == 'push'
+    runs-on: ubuntu-latest
     permissions:
       contents: write
-    needs: [setup, build]
-    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.draft.outputs.version }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
     steps:
-      - name: Download Artifacts
-        uses: actions/download-artifact@v4
-        with:
-          pattern: golter-*
-          path: artifacts
-          merge-multiple: true
+      - id: draft
+        name: Prepare a draft for this commit
+        shell: bash
+        run: |
+          timestamp=$(gh api "repos/$GH_REPO/actions/runs/$GITHUB_RUN_ID" --jq .created_at)
+          version=$(date -u -d "$timestamp" +%Y.%m.%d.%H%M%S)
+          tag=v$version
+          if gh release view "$tag" --json isDraft,targetCommitish > existing.json; then
+            jq -e --arg sha "$GITHUB_SHA" '.isDraft and .targetCommitish == $sha' existing.json
+          else
+            gh release create "$tag" --draft --target "$GITHUB_SHA" --title "Release $tag" --generate-notes
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v2
-        with:
-          target_commitish: ${{ github.sha }}
-          fail_on_unmatched_files: true
-          tag_name: v${{ needs.setup.outputs.version }}
-          name: Release v${{ needs.setup.outputs.version }}
-          files: artifacts/*
-          draft: false
-          prerelease: false
-          generate_release_notes: true
+  build:
+    needs: draft
+    permissions:
+      contents: write
+    uses: ./.github/workflows/native.yml
+    with:
+      version: ${{ needs.draft.outputs.version }}
+      upload: true
+
+  release:
+    needs: [draft, build]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: v${{ needs.draft.outputs.version }}
+    steps:
+      - name: Verify assets and publish
+        shell: bash
+        run: |
+          gh release view "$TAG" --json isDraft,targetCommitish,assets | jq -e --arg sha "$GITHUB_SHA" '
+            .isDraft and .targetCommitish == $sha and
+            all(.assets[]; .size > 0 and .state == "uploaded") and
+            ([.assets[].name] | sort) == [
+              "golter-darwin-amd64", "golter-darwin-arm64", "golter-linux-amd64",
+              "golter-windows-amd64.exe", "linux-test-evidence.tar.gz"
+            ]'
+          gh release edit "$TAG" --draft=false --latest

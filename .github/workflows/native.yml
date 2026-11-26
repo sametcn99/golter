@@ -1,0 +1,114 @@
+name: Native tests and build
+on:
+  workflow_call:
+    inputs:
+      version:
+        type: string
+        required: true
+      upload:
+        type: boolean
+        default: false
+
+jobs:
+  native:
+    env:
+      GOTOOLCHAIN: go1.24.4
+      VERSION: ${{ inputs.version }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+            runner: ubuntu-latest
+            ext: ""
+          - os: windows
+            arch: amd64
+            runner: windows-latest
+            ext: ".exe"
+          - os: darwin
+            arch: amd64
+            runner: macos-15-intel
+            ext: ""
+          - os: darwin
+            arch: arm64
+            runner: macos-latest
+            ext: ""
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - name: Check out the event commit
+        shell: bash
+        run: |
+          git init .
+          git config core.autocrlf false
+          git remote add origin "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          git fetch --no-tags --depth=1 origin "$GITHUB_SHA"
+          git checkout --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          go version
+
+      - name: Install integration tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ffmpeg pandoc calibre poppler-utils
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Full integration and race tests
+        if: runner.os == 'Linux'
+        env:
+          GOLTER_REQUIRE_TOOLS: '1'
+          QT_QPA_PLATFORM: offscreen
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -race -json -count=1 -coverprofile=coverage.out ./... | tee test-results.jsonl
+          python3 tests/coverage_summary.py test-results.jsonl coverage.out >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Native tests
+        if: runner.os != 'Linux'
+        run: go test -count=1 ./...
+
+      - name: Build Application
+        shell: bash
+        run: |
+          mkdir -p bin
+          LDFLAGS="-s -w -X 'github.com/sametcn99/golter/internal/version.Current=$VERSION'"
+          export CGO_ENABLED=1
+          GOOS=${{ matrix.os }} GOARCH=${{ matrix.arch }} go build -ldflags="$LDFLAGS" -o bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }} .
+
+      - name: Exercise the built executable in a terminal
+        shell: bash
+        run: |
+          if [[ "$RUNNER_OS" == Windows ]]; then
+            python -m venv .venv
+            py=.venv/Scripts/python.exe
+          else
+            python3 -m venv .venv
+            py=.venv/bin/python
+          fi
+          "$py" -m pip install 'ptyprocess==0.7.0; sys_platform != "win32"' 'pywinpty>=2,<4; sys_platform == "win32"'
+          "$py" tests/terminal_smoke.py bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+
+      - name: Attach tested binary to the draft
+        if: inputs.upload
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          ASSET: bin/golter-${{ matrix.os }}-${{ matrix.arch }}${{ matrix.ext }}
+        shell: bash
+        run: |
+          test "$(gh release view "v$VERSION" --json isDraft --jq .isDraft)" = true
+          gh release upload "v$VERSION" "$ASSET" --clobber
+
+      - name: Attach Linux integration results
+        if: inputs.upload && runner.os == 'Linux'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        shell: bash
+        run: |
+          tar -czf linux-test-evidence.tar.gz test-results.jsonl coverage.out
+          gh release upload "v$VERSION" linux-test-evidence.tar.gz --clobber
